@@ -825,6 +825,12 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
 ];
 
 export const ALLOWED_TABS_BY_ROLE: Record<Role, string[]> = {
+  ADMIN: [
+    'dashboard', 'enrollment', 'contracts', 'classes', 'subjects', 'schedule', 
+    'attendance', 'homework', 'scores', 'academic_reports', 'tuition', 'invoices', 
+    'payments', 'refunds', 'ai_study', 'ai_analytics', 'ai_risk', 'ai_exam', 
+    'hr', 'users', 'roles', 'settings', 'notifications', 'observability', 'reports_hub'
+  ],
   OWNER: [
     'dashboard', 'enrollment', 'contracts', 'classes', 'subjects', 'schedule', 
     'attendance', 'homework', 'scores', 'academic_reports', 'tuition', 'invoices', 

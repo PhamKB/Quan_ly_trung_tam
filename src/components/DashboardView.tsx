@@ -603,6 +603,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   };
 
   switch (currentRole) {
+    case 'ADMIN':
     case 'OWNER':
     case 'ACADEMIC_STAFF':
     case 'ACCOUNTANT':
