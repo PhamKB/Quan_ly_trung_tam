@@ -1,0 +1,6 @@
+{
+  "name": "Smart Education Center",
+  "description": "Hệ thống quản lý trung tâm giáo dục thông minh - Giải pháp ERP toàn diện tối ưu vận hành học vụ, tài chính và phân tích AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

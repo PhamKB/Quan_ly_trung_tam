@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // =========================================================================
+    // SECURITY WARNING: TEMPORARY DEVELOPMENT SANDBOX RULES
+    // =========================================================================
+    // These rules are configured with 'allow read, write: if true' to enable
+    // seed operations (POST /api/seed) and initial real-time sync testing
+    // in the development environment.
+    //
+    // CRITICAL: DO NOT use these rules in production. In Checkpoint 2, we will
+    // implement complete Firebase Authentication with a strict Role-Based Access
+    // Control (RBAC) matrix enforcing:
+    //
+    // 1. ADMIN/OWNER: Read/Write access to all collections (Revenue, Expenses, etc.)
+    // 2. ACADEMIC_STAFF: Read/Write on classes, schedules, students, parents.
+    // 3. TEACHER: Read classes assigned, Read/Write scores and attendance for their classes.
+    // 4. STUDENT: Read-only on their own scores, schedule, and profile.
+    // 5. PARENT: Read-only on their own child's scores, tuition status, and profile.
+    // 6. ACCOUNTANT: Read/Write on invoices, payments, expenses, and financial states.
+    // =========================================================================
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /subjects/{id} {
+      // Temporary Sandbox Rule - Will be locked to write: if isAdmin()
+      allow read, write: if true;
+    }
+
+    match /teachers/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isSignedIn(), write: if isAcademicStaff() || isAdmin()
+      allow read, write: if true;
+    }
+
+    match /classes/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isSignedIn(), write: if isAcademicStaff() || isAdmin()
+      allow read, write: if true;
+    }
+
+    match /users/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isOwner(id) || isAdmin(), write: if isOwner(id) || isAdmin()
+      allow read, write: if true;
+    }
+
+    match /parents/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isParentOf(studentId) || isAcademicStaff(), write: if isAcademicStaff()
+      allow read, write: if true;
+    }
+
+    match /students/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isStudentOrParent(id) || isAcademicStaff(), write: if isAcademicStaff()
+      allow read, write: if true;
+    }
+
+    match /classEnrollments/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isSignedIn(), write: if isAcademicStaff()
+      allow read, write: if true;
+    }
+
+    match /invoices/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isFinancialOwner() || isAccountant(), write: if isAccountant()
+      allow read, write: if true;
+    }
+
+    match /payments/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isFinancialOwner() || isAccountant(), write: if isAccountant()
+      allow read, write: if true;
+    }
+
+    match /teacherAssignments/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isSignedIn(), write: if isAcademicStaff()
+      allow read, write: if true;
+    }
+
+    match /schedules/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isSignedIn(), write: if isAcademicStaff()
+      allow read, write: if true;
+    }
+
+    match /scores/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isSelf() || isTeacherOf() || isAcademicStaff(), write: if isTeacherOf()
+      allow read, write: if true;
+    }
+
+    match /expenses/{id} {
+      // Temporary Sandbox Rule - Will be locked to read, write: if isAccountant() || isAdmin()
+      allow read, write: if true;
+    }
+
+    match /homeworks/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isSignedIn(), write: if isTeacher()
+      allow read, write: if true;
+    }
+
+    match /employees/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isSignedIn(), write: if isOwner()
+      allow read, write: if true;
+    }
+
+    match /notifications/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if targetMatchesUser(), write: if isStaff()
+      allow read, write: if true;
+    }
+
+    match /auditLogs/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isAdmin(), write: if isSignedIn() (audit write only)
+      allow read, write: if true;
+    }
+
+    match /reports/{id} {
+      // Temporary Sandbox Rule - Will be locked to read: if isOwner() || isAcademicStaff(), write: if isAcademicStaff()
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "model_name": "Random Forest Regressor",
+  "model_name_vi": "Rừng ngẫu nhiên",
+  "version": "1.0.0",
+  "trained_at": "2026-08-10T06:00:00Z",
+  "sample_count": 5240,
+  "features": [
+    "hours_study",
+    "attendance",
+    "homework_completion",
+    "midterm_score"
+  ],
+  "target": "final_score",
+  "metrics": {
+    "mae": 0.61,
+    "mse": 0.74,
+    "rmse": 0.86,
+    "r2": 0.87
+  },
+  "feature_importance": {
+    "midterm_score": 0.42,
+    "homework_completion": 0.28,
+    "attendance": 0.18,
+    "hours_study": 0.12
+  },
+  "benchmark_comparison": [
+    {
+      "model": "Linear Regression",
+      "model_vi": "Hồi quy tuyến tính",
+      "mae": 0.74,
+      "mse": 0.98,
+      "rmse": 0.99,
+      "r2": 0.81
+    },
+    {
+      "model": "Random Forest Regressor",
+      "model_vi": "Rừng ngẫu nhiên",
+      "mae": 0.61,
+      "mse": 0.74,
+      "rmse": 0.86,
+      "r2": 0.87,
+      "selected": true
+    }
+  ]
+}

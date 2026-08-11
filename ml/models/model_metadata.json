@@ -1,0 +1,29 @@
+{
+  "model_name": "Random Forest",
+  "task": "regression",
+  "target": "G3",
+  "features": [
+    "studytime",
+    "failures",
+    "absences",
+    "G1",
+    "school",
+    "sex",
+    "age",
+    "internet",
+    "higher",
+    "goout",
+    "health"
+  ],
+  "dataset": "UCI Student Performance - student-mat.csv",
+  "training_samples": 316,
+  "test_samples": 79,
+  "metrics": {
+    "MAE": 1.5275998593530238,
+    "RMSE": 2.049743420998937,
+    "R2": 0.7951017602153182
+  },
+  "trained_at_utc": "2026-08-10T15:08:52.247569+00:00",
+  "version": "v1.0.0",
+  "feature_note": "V1 dùng feature có thật trong UCI; attendance và homework_completion chưa được bịa."
+}

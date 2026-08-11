@@ -1,0 +1,369 @@
+{
+  "entities": {
+    "Subject": {
+      "title": "Subject",
+      "description": "Subject entity representing school subjects",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" }
+      },
+      "required": ["id", "name", "code"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Teacher entity representing center teachers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "department": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "subjectId", "department"]
+    },
+    "Class": {
+      "title": "Class",
+      "description": "Class entity representing standard classes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "grade": { "type": "number" },
+        "room": { "type": "string" },
+        "capacity": { "type": "number" },
+        "schedule": { "type": "string" },
+        "status": { "type": "string" },
+        "teachers": { "type": "object" }
+      },
+      "required": ["id", "name", "grade", "room", "capacity", "schedule", "status"]
+    },
+    "User": {
+      "title": "User",
+      "description": "System user with RBAC role",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string" },
+        "department": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "email", "displayName", "role", "status"]
+    },
+    "Parent": {
+      "title": "Parent",
+      "description": "Parent representation linking to children",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "job": { "type": "string" },
+        "childIds": { "type": "array" }
+      },
+      "required": ["id", "name", "email", "childIds"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student entity representing a Middle School learner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "classId": { "type": "string" },
+        "className": { "type": "string" },
+        "course": { "type": "string" },
+        "grade": { "type": "number" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "parentId": { "type": "string" },
+        "parentName": { "type": "string" },
+        "gpa": { "type": "number" },
+        "attendanceRate": { "type": "number" },
+        "homeworkCompletion": { "type": "number" },
+        "riskScore": { "type": "number" },
+        "riskLevel": { "type": "string" },
+        "tuitionPaid": { "type": "number" },
+        "tuitionOwed": { "type": "number" },
+        "status": { "type": "string" },
+        "financials": { "type": "object" }
+      },
+      "required": ["id", "name", "classId", "className", "grade", "email", "parentId", "gpa", "attendanceRate", "homeworkCompletion", "riskScore", "riskLevel", "tuitionPaid", "tuitionOwed", "status"]
+    },
+    "ClassEnrollment": {
+      "title": "ClassEnrollment",
+      "description": "Class enrollment linkage",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "classId": { "type": "string" },
+        "academicYear": { "type": "string" },
+        "startDate": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "studentId", "classId", "academicYear", "startDate", "status"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Invoice financial billing doc",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "className": { "type": "string" },
+        "dateIssued": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "amount": { "type": "number" },
+        "discount": { "type": "number" },
+        "finalAmount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "studentId", "studentName", "className", "dateIssued", "dueDate", "amount", "discount", "finalAmount", "paidAmount", "status"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment receipt transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "invoiceId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "amount": { "type": "number" },
+        "method": { "type": "string" },
+        "date": { "type": "string" },
+        "processor": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "invoiceId", "studentName", "amount", "method", "date", "processor", "status"]
+    },
+    "TeacherAssignment": {
+      "title": "TeacherAssignment",
+      "description": "Assignment of teachers to classes/subjects",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "classId": { "type": "string" },
+        "academicYear": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "teacherId", "subjectId", "classId", "academicYear", "status"]
+    },
+    "Schedule": {
+      "title": "Schedule",
+      "description": "Weekly timetable slot",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "dayOfWeek": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "room": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "classId", "subjectId", "teacherId", "dayOfWeek", "startTime", "endTime", "room", "status"]
+    },
+    "Score": {
+      "title": "Score",
+      "description": "Academic scores of a student for a subject",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "classId": { "type": "string" },
+        "className": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "scoreRegular": { "type": "number" },
+        "scoreMid": { "type": "number" },
+        "scoreFinal": { "type": "number" },
+        "average": { "type": "number" },
+        "grade": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "studentId", "studentName", "classId", "className", "subjectId", "scoreRegular", "scoreMid", "scoreFinal", "average", "grade", "status"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Operational expense",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "expenseDate": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "category", "amount", "expenseDate", "createdBy", "status"]
+    },
+    "Homework": {
+      "title": "Homework",
+      "description": "Assigned homework for a class",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "classId": { "type": "string" },
+        "className": { "type": "string" },
+        "subject": { "type": "string" },
+        "dateAssigned": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "submittedCount": { "type": "number" },
+        "totalStudents": { "type": "number" },
+        "status": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "title", "classId", "className", "subject", "dateAssigned", "dueDate", "submittedCount", "totalStudents", "status"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Center staff or administrative employee",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role", "status"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System or user notifications",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "date": { "type": "string" },
+        "read": { "type": "boolean" },
+        "userId": { "type": "string" }
+      },
+      "required": ["id", "title", "message", "date", "read", "userId"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable security and audit event logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "actor": { "type": "string" },
+        "role": { "type": "string" },
+        "action": { "type": "string" },
+        "target": { "type": "string" },
+        "ip": { "type": "string" },
+        "status": { "type": "string" },
+        "details": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "actor", "role", "action", "target", "ip", "status"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Generated analytical reports",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "title", "type", "createdBy", "createdAt", "status"]
+    }
+  },
+  "firestore": {
+    "subjects": {
+      "schema": "Subject",
+      "description": "List of available school subjects"
+    },
+    "teachers": {
+      "schema": "Teacher",
+      "description": "List of educational center teachers"
+    },
+    "classes": {
+      "schema": "Class",
+      "description": "List of available classrooms"
+    },
+    "users": {
+      "schema": "User",
+      "description": "List of registered ERP users"
+    },
+    "parents": {
+      "schema": "Parent",
+      "description": "List of parents linked to students"
+    },
+    "students": {
+      "schema": "Student",
+      "description": "List of students"
+    },
+    "classEnrollments": {
+      "schema": "ClassEnrollment",
+      "description": "List of student enrollments in classes"
+    },
+    "invoices": {
+      "schema": "Invoice",
+      "description": "Financial tuition billing documents"
+    },
+    "payments": {
+      "schema": "Payment",
+      "description": "Financial tuition payment logs"
+    },
+    "teacherAssignments": {
+      "schema": "TeacherAssignment",
+      "description": "Assigned teachers for each subject and class"
+    },
+    "schedules": {
+      "schema": "Schedule",
+      "description": "School timetable sessions schedule"
+    },
+    "scores": {
+      "schema": "Score",
+      "description": "Midterm, regular, and final scorebooks"
+    },
+    "expenses": {
+      "schema": "Expense",
+      "description": "Internal business center operating expenses"
+    },
+    "homeworks": {
+      "schema": "Homework",
+      "description": "Assigned homework tasks per class"
+    },
+    "employees": {
+      "schema": "Employee",
+      "description": "Academic center administrative employees"
+    },
+    "notifications": {
+      "schema": "Notification",
+      "description": "Real-time user and system alerts"
+    },
+    "auditLogs": {
+      "schema": "AuditLog",
+      "description": "Security auditing records"
+    },
+    "reports": {
+      "schema": "Report",
+      "description": "Academic and administrative center reports"
+    }
+  }
+}
