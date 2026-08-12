@@ -5,7 +5,6 @@ service cloud.firestore {
     // =========================================================================
     // PRODUCTION HARDENED ZERO-TRUST ROLE-BASED ACCESS CONTROL (RBAC) RULES
     // =========================================================================
-    // Reusable, hardened security helper primitives
     function isSignedIn() {
       return request.auth != null;
     }
@@ -46,26 +45,18 @@ service cloud.firestore {
       return isAdmin() || isAcademicStaff() || isAccountant() || isTeacher();
     }
 
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
     // Default deny catch-all
     match /{document=**} {
       allow read, write: if false;
     }
 
     match /users/{id} {
-      // Any authenticated user can read profiles (needed for displays and lookups)
       allow read: if isSignedIn();
-      // Only self or Admin or Academic Staff can create
       allow create: if isSignedIn() && (request.auth.uid == id || isAdmin() || isAcademicStaff());
-      // Users cannot change their own roles (Prevent Self-Assigned Roles)
       allow update: if isSignedIn() && (
         isAdmin() || 
         (request.auth.uid == id && request.resource.data.role == resource.data.role && request.resource.data.status == resource.data.status)
       );
-      // Only Admin can delete users
       allow delete: if isAdmin();
     }
 
@@ -152,6 +143,20 @@ service cloud.firestore {
     match /reports/{id} {
       allow read: if isAdmin() || isAcademicStaff() || isAccountant();
       allow write: if isAdmin() || isAcademicStaff();
+    }
+
+    // AI Predictions collection (Accountant strictly denied)
+    match /ai_predictions/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && !isAccountant();
+      allow update: if isSignedIn() && (isAdmin() || isAcademicStaff() || isTeacher());
+      allow delete: if isAdmin();
+    }
+
+    // Model Registry collection
+    match /model_versions/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }

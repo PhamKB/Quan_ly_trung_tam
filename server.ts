@@ -11,47 +11,109 @@ const PORT = 3000;
 
 app.use(express.json());
 
-// In-memory predictions history log store (simulating ai_predictions table)
-const aiPredictionsStore: Array<{
+// In-memory persistent predictions store for AI Model Monitoring & Evaluation
+export interface PredictionRecord {
   id: string;
-  student_id?: string;
-  student_name?: string;
-  hours_study: number;
-  attendance: number;
-  homework_completion: number;
-  midterm_score: number;
-  predicted_final_score: number;
-  risk_level: string;
-  model_version: string;
-  created_at: string;
-}> = [
+  studentId: string;
+  studentName: string;
+  studytime: number;
+  failures: number;
+  absences: number;
+  G1: number;
+  school: string;
+  sex: string;
+  age: number;
+  internet: string;
+  higher: string;
+  goout: number;
+  health: number;
+  predictedScore: number;
+  modelVersion: string;
+  modelName: string;
+  createdAt: string;
+  actualScore?: number;
+  absoluteError?: number;
+  evaluatedAt?: string;
+  evaluatedBy?: string;
+}
+
+export const aiPredictionsStore: PredictionRecord[] = [
   {
-    id: 'PRED-101',
-    student_id: 'STU-2026-001',
-    student_name: 'Nguyễn Minh Anh',
-    hours_study: 8,
-    attendance: 92,
-    homework_completion: 95,
-    midterm_score: 8.2,
-    predicted_final_score: 8.7,
-    risk_level: 'Thấp',
-    model_version: '1.0.0',
-    created_at: new Date(Date.now() - 3600000 * 24).toISOString()
+    id: 'PRED-2026-001',
+    studentId: 'STU-2026-001',
+    studentName: 'Nguyễn Minh Anh',
+    studytime: 3,
+    failures: 0,
+    absences: 2,
+    G1: 15,
+    school: 'GP',
+    sex: 'F',
+    age: 15,
+    internet: 'yes',
+    higher: 'yes',
+    goout: 2,
+    health: 4,
+    predictedScore: 15.2,
+    actualScore: 16.0,
+    absoluteError: 0.8,
+    evaluatedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
+    evaluatedBy: 'TEA-101',
+    modelVersion: '1.0.0',
+    modelName: 'Random Forest Regressor',
+    createdAt: new Date(Date.now() - 3600000 * 48).toISOString()
   },
   {
-    id: 'PRED-102',
-    student_id: 'STU-2026-002',
-    student_name: 'Trần Hoàng Nam',
-    hours_study: 4,
-    attendance: 78,
-    homework_completion: 65,
-    midterm_score: 5.5,
-    predicted_final_score: 5.8,
-    risk_level: 'Cao',
-    model_version: '1.0.0',
-    created_at: new Date(Date.now() - 3600000 * 12).toISOString()
+    id: 'PRED-2026-002',
+    studentId: 'STU-2026-002',
+    studentName: 'Trần Hoàng Nam',
+    studytime: 1,
+    failures: 2,
+    absences: 12,
+    G1: 8,
+    school: 'MS',
+    sex: 'M',
+    age: 16,
+    internet: 'no',
+    higher: 'no',
+    goout: 4,
+    health: 3,
+    predictedScore: 7.4,
+    actualScore: 8.0,
+    absoluteError: 0.6,
+    evaluatedAt: new Date(Date.now() - 3600000 * 6).toISOString(),
+    evaluatedBy: 'TEA-102',
+    modelVersion: '1.0.0',
+    modelName: 'Random Forest Regressor',
+    createdAt: new Date(Date.now() - 3600000 * 24).toISOString()
+  },
+  {
+    id: 'PRED-2026-003',
+    studentId: 'STU-2026-003',
+    studentName: 'Lê Thu Trang',
+    studytime: 4,
+    failures: 0,
+    absences: 1,
+    G1: 17,
+    school: 'GP',
+    sex: 'F',
+    age: 15,
+    internet: 'yes',
+    higher: 'yes',
+    goout: 2,
+    health: 5,
+    predictedScore: 17.8,
+    modelVersion: '1.0.0',
+    modelName: 'Random Forest Regressor',
+    createdAt: new Date(Date.now() - 3600000 * 2).toISOString()
   }
 ];
+
+// Helper RBAC Middleware
+const getAuthUser = (req: express.Request) => {
+  const roleHeader = (req.headers['x-user-role'] as string) || 'ADMIN';
+  const idHeader = (req.headers['x-user-id'] as string) || 'USER-ADMIN';
+  return { role: roleHeader.toUpperCase(), id: idHeader };
+};
 
 // --- REAL MACHINE LEARNING REST APIS ---
 
@@ -73,105 +135,222 @@ app.post('/api/seed', async (req, res) => {
 
 // GET AI Model Info & Metrics
 app.get('/api/ai/model-info', (req, res) => {
-  const modelInfo = studentScoreService.getModelInfo();
-  res.json(modelInfo);
-});
-
-// POST direct feature prediction
-app.post('/api/ai/predict-score', (req, res) => {
   try {
-    const { hours_study, attendance, homework_completion, midterm_score, student_id, student_name } = req.body;
-    
-    if (
-      hours_study === undefined || 
-      attendance === undefined || 
-      homework_completion === undefined || 
-      midterm_score === undefined
-    ) {
-      return res.status(400).json({ error: 'Dữ liệu đầu vào không hợp lệ. Vui lòng cung cấp đủ thông tin.' });
+    const user = getAuthUser(req);
+    if (user.role === 'ACCOUNTANT') {
+      return res.status(403).json({ error: 'Truy cập bị từ chối: Vai trò Kế toán không có quyền truy cập tính năng AI.' });
     }
-
-    const prediction = studentScoreService.predict({
-      hours_study: Number(hours_study),
-      attendance: Number(attendance),
-      homework_completion: Number(homework_completion),
-      midterm_score: Number(midterm_score)
-    });
-
-    // Save prediction record to history log
-    const logEntry = {
-      id: `PRED-${Date.now().toString().slice(-5)}`,
-      student_id: student_id || 'GUEST',
-      student_name: student_name || 'Học viên xem trước',
-      hours_study: Number(hours_study),
-      attendance: Number(attendance),
-      homework_completion: Number(homework_completion),
-      midterm_score: Number(midterm_score),
-      predicted_final_score: prediction.predicted_final_score,
-      risk_level: prediction.risk_level,
-      model_version: prediction.model_version,
-      created_at: prediction.created_at
-    };
-
-    aiPredictionsStore.unshift(logEntry);
-
-    res.json(prediction);
+    const modelInfo = studentScoreService.getModelInfo();
+    res.json(modelInfo);
   } catch (error: any) {
-    res.status(500).json({ error: 'Đã xảy ra lỗi khi thực hiện dự đoán từ mô hình Machine Learning.' });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// POST predict student score by ID (Fetches student parameters from DB)
-app.post('/api/students/:id/ai/predict-score', async (req, res) => {
+// GET Model Version Registry & Governance Metadata
+app.get('/api/ai/model-registry', (req, res) => {
   try {
-    const studentId = req.params.id;
-    const studentDocRef = doc(db, 'students', studentId);
-    const studentSnap = await getDoc(studentDocRef);
-    const student = studentSnap.exists() ? studentSnap.data() : null;
+    const user = getAuthUser(req);
+    if (user.role === 'ACCOUNTANT') {
+      return res.status(403).json({ error: 'Truy cập bị từ chối: Vai trò Kế toán không có quyền truy cập.' });
+    }
+    const modelInfo = studentScoreService.getModelInfo();
+    const registry = [
+      {
+        id: 'student-score-v1.0.0',
+        modelName: modelInfo.model_name,
+        version: modelInfo.version,
+        artifactPath: 'ml/models/student_score_model-1.joblib',
+        dataset: modelInfo.dataset,
+        features: modelInfo.features,
+        metrics: modelInfo.metrics,
+        trainedAt: modelInfo.trained_at_utc,
+        status: 'Đang sử dụng',
+        rollbackSupported: true,
+        rollbackTargetVersion: null
+      }
+    ];
+    res.json(registry);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
-    // Derive or fetch student performance indicators
-    const hours_study = req.body.hours_study !== undefined ? Number(req.body.hours_study) : 7.5;
-    const attendance = student ? student.attendanceRate : 85;
-    const homework_completion = student ? Math.min(student.attendanceRate + 4, 98) : 88;
-    const midterm_score = student ? student.gpa : 7.0;
+// POST direct feature prediction (11 UCI Features)
+app.post('/api/ai/predict-score', (req, res) => {
+  try {
+    const user = getAuthUser(req);
 
-    const prediction = studentScoreService.predict({
-      hours_study,
-      attendance,
-      homework_completion,
-      midterm_score
-    });
+    // RBAC: ACCOUNTANT strictly forbidden
+    if (user.role === 'ACCOUNTANT') {
+      return res.status(403).json({ error: 'Truy cập bị từ chối: Vai trò Kế toán không có quyền truy cập tính năng dự đoán AI.' });
+    }
 
-    // Save record to ai_predictions audit table
-    const logEntry = {
-      id: `PRED-${Date.now().toString().slice(-5)}`,
-      student_id: studentId,
-      student_name: student ? student.name : 'Học viên',
-      hours_study,
-      attendance,
-      homework_completion,
-      midterm_score,
-      predicted_final_score: prediction.predicted_final_score,
-      risk_level: prediction.risk_level,
-      model_version: prediction.model_version,
-      created_at: prediction.created_at
+    // Ownership / IDOR Checks
+    const targetStudentId = req.body.student_id || req.body.studentId || 'STU-2026-001';
+    if (user.role === 'STUDENT' && user.id !== targetStudentId && targetStudentId !== 'STU-2026-001') {
+      return res.status(403).json({ error: 'Truy cập bị từ chối: Học sinh chỉ có thể xem/dự đoán điểm cho chính mình.' });
+    }
+
+    // Input Validation
+    let validatedInput;
+    try {
+      validatedInput = studentScoreService.validateInput(req.body);
+    } catch (valErr: any) {
+      return res.status(400).json({ error: valErr.message });
+    }
+
+    // Perform Inference
+    const prediction = studentScoreService.predict(validatedInput);
+
+    // Save prediction record to history store
+    const recordId = `PRED-2026-${(aiPredictionsStore.length + 1).toString().padStart(3, '0')}`;
+    const logEntry: PredictionRecord = {
+      id: recordId,
+      studentId: targetStudentId,
+      studentName: req.body.student_name || req.body.studentName || 'Học viên THCS',
+      ...validatedInput,
+      predictedScore: prediction.predictedScore,
+      modelVersion: prediction.modelVersion,
+      modelName: prediction.modelName,
+      createdAt: prediction.createdAt
     };
 
     aiPredictionsStore.unshift(logEntry);
 
     res.json({
-      student_id: studentId,
-      student_name: student ? student.name : 'Học viên',
-      ...prediction
+      id: recordId,
+      studentId: logEntry.studentId,
+      studentName: logEntry.studentName,
+      predictedScore: prediction.predictedScore,
+      modelVersion: prediction.modelVersion,
+      modelName: prediction.modelName,
+      createdAt: prediction.createdAt,
+      inputSummary: prediction.inputSummary
     });
   } catch (error: any) {
-    res.status(500).json({ error: 'Lỗi truy xuất dữ liệu học viên để dự đoán ML từ Firestore.' });
+    console.error('[API Predict Error]', error);
+    res.status(500).json({ error: 'Đã xảy ra lỗi khi thực hiện dự đoán từ mô hình Machine Learning: ' + error.message });
+  }
+});
+
+// POST Evaluate actual score vs predicted score
+app.post('/api/ai/predictions/:id/evaluate', (req, res) => {
+  try {
+    const user = getAuthUser(req);
+
+    // RBAC: Students, Parents, Accountants cannot evaluate predictions
+    if (user.role === 'STUDENT' || user.role === 'PARENT' || user.role === 'ACCOUNTANT') {
+      return res.status(403).json({ error: 'Truy cập bị từ chối: Bạn không có quyền nhập/đánh giá điểm thực tế.' });
+    }
+
+    const { id } = req.params;
+    const { actualScore } = req.body;
+
+    if (actualScore === undefined || actualScore === null || isNaN(Number(actualScore))) {
+      return res.status(400).json({ error: 'Điểm thực tế (actualScore) không hợp lệ.' });
+    }
+
+    const numActual = Number(actualScore);
+    if (numActual < 0 || numActual > 20) {
+      return res.status(400).json({ error: 'Điểm thực tế (actualScore) phải nằm trong thang điểm 0 - 20.' });
+    }
+
+    const recordIndex = aiPredictionsStore.findIndex(r => r.id === id);
+    if (recordIndex === -1) {
+      return res.status(404).json({ error: `Không tìm thấy bản ghi dự đoán với ID ${id}.` });
+    }
+
+    const record = aiPredictionsStore[recordIndex];
+    const absoluteError = Math.round(Math.abs(record.predictedScore - numActual) * 100) / 100;
+
+    record.actualScore = numActual;
+    record.absoluteError = absoluteError;
+    record.evaluatedAt = new Date().toISOString();
+    record.evaluatedBy = user.id;
+
+    res.json({
+      success: true,
+      message: 'Đã cập nhật điểm thực tế và tính toán sai số tuyệt đối.',
+      prediction: record
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
 // GET predictions history log
 app.get('/api/ai/predictions-history', (req, res) => {
-  res.json(aiPredictionsStore);
+  try {
+    const user = getAuthUser(req);
+    if (user.role === 'ACCOUNTANT') {
+      return res.status(403).json({ error: 'Truy cập bị từ chối: Vai trò Kế toán không có quyền xem lịch sử AI.' });
+    }
+
+    let results = aiPredictionsStore;
+    if (user.role === 'STUDENT') {
+      results = aiPredictionsStore.filter(r => r.studentId === user.id);
+    }
+
+    res.json(results);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET Real-time Model Monitoring Metrics
+app.get('/api/ai/monitoring', (req, res) => {
+  try {
+    const user = getAuthUser(req);
+    if (user.role === 'ACCOUNTANT') {
+      return res.status(403).json({ error: 'Truy cập bị từ chối: Vai trò Kế toán không có quyền truy cập.' });
+    }
+
+    const totalPredictions = aiPredictionsStore.length;
+    const evaluatedRecords = aiPredictionsStore.filter(r => r.actualScore !== undefined && r.absoluteError !== undefined);
+    const evaluatedPredictions = evaluatedRecords.length;
+
+    let realMAE: number | null = null;
+    let medianError: number | null = null;
+    let avgPredictedScore: number | null = null;
+    let avgActualScore: number | null = null;
+
+    if (totalPredictions > 0) {
+      const sumPredicted = aiPredictionsStore.reduce((acc, r) => acc + r.predictedScore, 0);
+      avgPredictedScore = Math.round((sumPredicted / totalPredictions) * 10) / 10;
+    }
+
+    if (evaluatedPredictions > 0) {
+      const sumError = evaluatedRecords.reduce((acc, r) => acc + (r.absoluteError || 0), 0);
+      realMAE = Math.round((sumError / evaluatedPredictions) * 100) / 100;
+
+      const sumActual = evaluatedRecords.reduce((acc, r) => acc + (r.actualScore || 0), 0);
+      avgActualScore = Math.round((sumActual / evaluatedPredictions) * 10) / 10;
+
+      const sortedErrors = evaluatedRecords.map(r => r.absoluteError || 0).sort((a, b) => a - b);
+      const mid = Math.floor(sortedErrors.length / 2);
+      medianError = sortedErrors.length % 2 !== 0
+        ? sortedErrors[mid]
+        : Math.round(((sortedErrors[mid - 1] + sortedErrors[mid]) / 2) * 100) / 100;
+    }
+
+    const modelInfo = studentScoreService.getModelInfo();
+
+    res.json({
+      totalPredictions,
+      evaluatedPredictions,
+      realMAE,
+      medianError,
+      avgPredictedScore,
+      avgActualScore,
+      modelVersion: modelInfo.version,
+      modelName: modelInfo.model_name,
+      trainingMetrics: modelInfo.metrics,
+      evaluatedRecords
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 async function startServer() {

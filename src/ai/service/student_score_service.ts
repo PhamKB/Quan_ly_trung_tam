@@ -1,135 +1,168 @@
-import trainedModelArtifact from '../model/student_score_model.json';
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
 
-export interface StudentInputFeatures {
-  hours_study: number;
-  attendance: number;
-  homework_completion: number;
-  midterm_score: number;
+export interface UciStudentInputFeatures {
+  studytime: number;
+  failures: number;
+  absences: number;
+  G1: number;
+  school: string;
+  sex: string;
+  age: number;
+  internet: string;
+  higher: string;
+  goout: number;
+  health: number;
 }
 
 export interface PredictionResult {
-  predicted_final_score: number;
-  risk_level: 'Thấp' | 'Trung bình' | 'Cao' | 'Rất cao';
-  risk_factors: string[];
-  recommendation: string;
+  predictedScore: number;
+  modelVersion: string;
+  modelName: string;
+  createdAt: string;
+  inputSummary: UciStudentInputFeatures;
+}
+
+export interface ModelMetadataInfo {
   model_name: string;
-  model_version: string;
+  version: string;
+  target: string;
+  features: string[];
+  dataset: string;
+  training_samples: number;
+  test_samples: number;
   metrics: {
-    mae: number;
-    mse: number;
-    rmse: number;
-    r2: number;
+    MAE: number;
+    RMSE: number;
+    R2: number;
   };
-  input_summary: StudentInputFeatures;
-  created_at: string;
+  trained_at_utc: string;
+  feature_note: string;
+  status: string;
 }
 
 class StudentScoreService {
-  private model = trainedModelArtifact;
+  private metadataPath: string;
 
   constructor() {
-    console.log(`[AI ML Service] Loaded model ${this.model.model_type} v${this.model.version}`);
+    this.metadataPath = path.resolve(process.cwd(), 'ml/models/model_metadata.json');
   }
 
-  public getModelInfo() {
+  public getModelInfo(): ModelMetadataInfo {
+    if (!fs.existsSync(this.metadataPath)) {
+      throw new Error(`Model metadata file not found at ${this.metadataPath}`);
+    }
+    const raw = fs.readFileSync(this.metadataPath, 'utf-8');
+    const meta = JSON.parse(raw);
     return {
-      model_type: this.model.model_type,
-      model_name_vi: this.model.model_name_vi,
-      version: this.model.version,
-      trained_at: this.model.trained_at,
-      sample_count: this.model.sample_count,
-      features: this.model.features,
-      feature_importance: this.model.feature_importance,
-      metrics: this.model.metrics,
+      ...meta,
       status: 'Đang hoạt động'
     };
   }
 
-  public predict(input: StudentInputFeatures): PredictionResult {
-    // 1. Input Validation & Range Clipping
-    const hours = Math.min(Math.max(Number(input.hours_study) || 0, 0), 30);
-    const attendance = Math.min(Math.max(Number(input.attendance) || 0, 0), 100);
-    const homework = Math.min(Math.max(Number(input.homework_completion) || 0, 0), 100);
-    const midterm = Math.min(Math.max(Number(input.midterm_score) || 0, 0), 10);
-
-    // 2. Real Feature Preprocessing & Scaling
-    // Standard scaling transform: z = (x - mean) / std
-    const zHours = (hours - this.model.scaler.mean[0]) / this.model.scaler.scale[0];
-    const zAttendance = (attendance - this.model.scaler.mean[1]) / this.model.scaler.scale[1];
-    const zHomework = (homework - this.model.scaler.mean[2]) / this.model.scaler.scale[2];
-    const zMidterm = (midterm - this.model.scaler.mean[3]) / this.model.scaler.scale[3];
-
-    // 3. Real Machine Learning Model Prediction
-    // Base regression + Non-linear Decision Tree ensemble adjustments
-    const basePrediction = 
-      midterm * this.model.linear_weights.midterm_score +
-      homework * this.model.linear_weights.homework_completion +
-      attendance * this.model.linear_weights.attendance +
-      hours * this.model.linear_weights.hours_study +
-      this.model.linear_weights.intercept;
-
-    // Non-linear ensemble adjustment
-    let nonLinearAdj = 0;
-    if (attendance < 70) nonLinearAdj -= 0.6;
-    if (homework < 60) nonLinearAdj -= 0.5;
-    if (hours >= 10 && homework >= 90) nonLinearAdj += 0.4;
-    if (midterm >= 8.5 && attendance >= 90) nonLinearAdj += 0.3;
-
-    const rawScore = basePrediction + nonLinearAdj;
-    const finalScore = Math.min(Math.max(Math.round(rawScore * 10) / 10, 1.0), 10.0);
-
-    // 4. Risk Level & Analytical Factor Determination
-    let risk_level: 'Thấp' | 'Trung bình' | 'Cao' | 'Rất cao' = 'Thấp';
-    const risk_factors: string[] = [];
-
-    if (attendance < 75) {
-      risk_factors.push(`Chuyên cần thấp (${attendance}%) dưới ngưỡng an toàn 80%`);
-    }
-    if (homework < 70) {
-      risk_factors.push(`Mức hoàn thành bài tập (${homework}%) cần được cải thiện`);
-    }
-    if (hours < 4) {
-      risk_factors.push(`Thời lượng tự học (${hours}h/tuần) còn quá ít`);
-    }
-    if (midterm < 5.0) {
-      risk_factors.push(`Điểm giữa kỳ (${midterm}) chưa đạt điểm trung bình`);
+  public validateInput(input: any): UciStudentInputFeatures {
+    if (!input || typeof input !== 'object') {
+      throw new Error('Dữ liệu đầu vào phải là một đối tượng JSON hợp lệ.');
     }
 
-    if (finalScore < 5.0 || attendance < 65) {
-      risk_level = 'Rất cao';
-    } else if (finalScore < 6.5 || risk_factors.length >= 2) {
-      risk_level = 'Cao';
-    } else if (finalScore < 8.0 || risk_factors.length === 1) {
-      risk_level = 'Trung bình';
-    } else {
-      risk_level = 'Thấp';
+    const requiredKeys: (keyof UciStudentInputFeatures)[] = [
+      'studytime', 'failures', 'absences', 'G1',
+      'school', 'sex', 'age', 'internet', 'higher', 'goout', 'health'
+    ];
+
+    for (const key of requiredKeys) {
+      if (input[key] === undefined || input[key] === null) {
+        throw new Error(`Thiếu thuộc tính bắt buộc '${key}' trong dữ liệu đầu vào.`);
+      }
     }
 
-    let recommendation = 'Học viên có phong độ học tập rất tốt, cần tiếp tục duy trì.';
-    if (risk_level === 'Rất cao') {
-      recommendation = 'Cần gặp trực tiếp học viên và phụ huynh để lập kế hoạch phụ đạo gấp.';
-    } else if (risk_level === 'Cao') {
-      recommendation = 'Nên tăng cường thời lượng làm bài tập về nhà và nâng tỷ lệ chuyên cần.';
-    } else if (risk_level === 'Trung bình') {
-      recommendation = 'Khuyến khích học viên dành thêm 2-3 giờ tự học mỗi tuần để bứt phá.';
+    const studytime = Number(input.studytime);
+    const failures = Number(input.failures);
+    const absences = Number(input.absences);
+    const G1 = Number(input.G1);
+    const school = String(input.school).trim();
+    const sex = String(input.sex).trim();
+    const age = Number(input.age);
+    const internet = String(input.internet).trim();
+    const higher = String(input.higher).trim();
+    const goout = Number(input.goout);
+    const health = Number(input.health);
+
+    if (isNaN(studytime) || studytime < 1 || studytime > 4) {
+      throw new Error("Mức thời gian tự học 'studytime' phải là số nguyên từ 1 đến 4.");
+    }
+    if (isNaN(failures) || failures < 0 || failures > 4) {
+      throw new Error("Số lần không đạt 'failures' phải là số từ 0 đến 4.");
+    }
+    if (isNaN(absences) || absences < 0 || absences > 100) {
+      throw new Error("Số buổi vắng 'absences' phải là số từ 0 đến 100.");
+    }
+    if (isNaN(G1) || G1 < 0 || G1 > 20) {
+      throw new Error("Điểm G1 'G1' phải là số trong thang điểm từ 0 đến 20.");
+    }
+    if (school !== 'GP' && school !== 'MS') {
+      throw new Error("Mã trường học 'school' chỉ nhận giá trị 'GP' hoặc 'MS'.");
+    }
+    if (sex !== 'F' && sex !== 'M') {
+      throw new Error("Giới tính 'sex' chỉ nhận giá trị 'F' hoặc 'M'.");
+    }
+    if (isNaN(age) || age < 10 || age > 30) {
+      throw new Error("Tuổi học sinh 'age' phải là số từ 10 đến 30.");
+    }
+    if (internet !== 'yes' && internet !== 'no') {
+      throw new Error("Chỉ số 'internet' chỉ nhận giá trị 'yes' hoặc 'no'.");
+    }
+    if (higher !== 'yes' && higher !== 'no') {
+      throw new Error("Chỉ số 'higher' chỉ nhận giá trị 'yes' hoặc 'no'.");
+    }
+    if (isNaN(goout) || goout < 1 || goout > 5) {
+      throw new Error("Mức độ đi chơi 'goout' phải là số từ 1 đến 5.");
+    }
+    if (isNaN(health) || health < 1 || health > 5) {
+      throw new Error("Chỉ số sức khỏe 'health' phải là số từ 1 đến 5.");
     }
 
     return {
-      predicted_final_score: finalScore,
-      risk_level,
-      risk_factors,
-      recommendation,
-      model_name: `${this.model.model_name_vi} (${this.model.model_type})`,
-      model_version: this.model.version,
-      metrics: this.model.metrics,
-      input_summary: {
-        hours_study: hours,
-        attendance,
-        homework_completion: homework,
-        midterm_score: midterm
-      },
-      created_at: new Date().toISOString()
+      studytime,
+      failures,
+      absences,
+      G1,
+      school,
+      sex,
+      age,
+      internet,
+      higher,
+      goout,
+      health
     };
+  }
+
+  public predict(input: any): PredictionResult {
+    const validatedInput = this.validateInput(input);
+    const scriptPath = path.resolve(process.cwd(), 'ml/src/predict.py');
+    const jsonArg = JSON.stringify(validatedInput);
+
+    try {
+      const command = `python3 "${scriptPath}" '${jsonArg}'`;
+      const stdout = execSync(command, { encoding: 'utf-8', timeout: 10000 });
+      const parsed = JSON.parse(stdout.trim());
+
+      if (!parsed.success) {
+        throw new Error(parsed.error || 'Thực thi mô hình Python thất bại.');
+      }
+
+      return {
+        predictedScore: parsed.predictedScore,
+        modelVersion: parsed.modelVersion || '1.0.0',
+        modelName: parsed.modelName || 'Random Forest Regressor',
+        createdAt: new Date().toISOString(),
+        inputSummary: validatedInput
+      };
+    } catch (error: any) {
+      console.error('[StudentScoreService] Inference Error:', error);
+      throw new Error(`Lỗi suy luận từ mô hình ML Python: ${error.message}`);
+    }
   }
 }
 
