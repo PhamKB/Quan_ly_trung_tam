@@ -36,11 +36,23 @@ Trong Checkpoint 1 (Database & Seed), để hệ thống có thể khởi tạo 
 
 * **Mã nguồn:** `/firestore.rules`
 * **Cơ chế:** Cho phép đọc/ghi tạm thời (`allow read, write: if true;`) kèm theo cảnh báo bảo mật và chú thích chi tiết kiến trúc khóa ở đầu file.
-* **Mục đích:** Hỗ trợ quy trình Seed dữ liệu từ Server, khởi tạo 80 học sinh, 18 giáo viên, 12 lớp học, hóa đơn, và điểm số.
+* **Mục đích:** Hỗ trợ quy trình Seed dữ liệu từ Server, khởi tạo 216 học sinh, 15 giáo viên, 12 lớp học, hóa đơn, và điểm số.
 
 ---
 
-## 4. CHIẾN LƯỢC NÂNG CẤP LÊN RBAC SẮP TỚI (CHECKPOINT 2)
+## 5. XÁC MINH KIẾN TRÚC BẢO MẬT KHÔNG TIN CẬY (CHECKPOINT 2.6 VERIFICATION)
+
+Đã hoàn thành nâng cấp và chẩn đoán bảo mật toàn diện cho phân hệ Đăng Nhập & Phân Quyền Workspace ở Checkpoint 2.6:
+
+1. **Strict Firestore Profile Verification (`users/{uid}`):**
+   - Không còn logic tự động đăng ký hoặc cấp vai trò tạm thời ở phía Client.
+   - Vai trò (`role`) và quyền hạn được lấy trực tiếp và duy nhất từ document `/users/{uid}`.
+2. **Xử lý tài khoản Thiếu Hồ sơ (`AUTH_PROFILE_NOT_FOUND`):**
+   - Khi tài khoản đăng nhập thành công qua Firebase Auth nhưng không tìm thấy document `users/{uid}`, hệ thống từ chối truy cập ngay lập tức, đăng xuất tài khoản và ghi nhận nhật ký kiểm toán.
+3. **Xử lý tài khoản Không Hoạt động (`AUTH_PROFILE_INACTIVE`):**
+   - Khi `status !== 'Đang hoạt động'` và `status !== 'ACTIVE'`, hệ thống chặn truy cập hoàn toàn.
+4. **Mô hình Phân quyền Không Tin Cận Phía Client:**
+   - URL hoặc state cục bộ không thể vượt qua RBAC. Nếu `activeTab` không nằm trong danh sách được phép của `profile.role`, hệ thống tự động điều hướng về `dashboard`.
 
 Khi triển khai Authentication và phân quyền thực tế ở Checkpoint 2, các rules sẽ được siết chặt như sau:
 
@@ -84,3 +96,19 @@ function hasRole(role) {
    ```
 
 Tất cả các collection khác (`homeworks`, `auditLogs`, `invoices`, `payments`) cũng sẽ áp dụng mô hình phân quyền chặt chẽ tương tự để chặn đứng mọi khả năng rò rỉ dữ liệu (Data Leak) hoặc can thiệp dữ liệu trái phép (Unauthorized Tampering).
+
+---
+
+## 6. XÁC MINH PHÂN QUYỀN VÀ BẢO MẬT CỦA PHÂN HỆ HỌC SINH & PHỤ HUYNH (CHECKPOINT 4.1)
+
+1. **Rule Đọc/Ghi Hai Collection `students` & `parents`:**
+   - **Quyền Tạo/Sửa/Thao tác (Write):** Chỉ cho phép người dùng có vai trò `ADMIN`, `OWNER`, hoặc `ACADEMIC_STAFF`.
+   - **Quyền Xem (Read):**
+     - `ADMIN`, `OWNER`, `ACADEMIC_STAFF`, `ACCOUNTANT`, `TEACHER`: Có quyền xem danh sách học sinh & phụ huynh.
+     - `STUDENT`: Chỉ xem được thông tin cá nhân của chính mình.
+     - `PARENT`: Chỉ xem được thông tin của con cái thuộc danh sách `childIds`/`studentIds` được liên kết.
+2. **Khóa liên kết dữ liệu nhạy cảm:**
+   - Liên kết tài khoản `userId` cho Học sinh/Phụ huynh được bảo mật tuyệt đối qua Security Rules và Audit Logging.
+3. **Toàn vẹn thao tác ghi hàng loạt (Atomic Batch Updates):**
+   - Mọi thao tác cập nhật liên kết Phụ huynh ↔ Học sinh đều phải dùng `writeBatch` hoặc `runTransaction` để đảm bảo không bị xung đột hay mất tính nhất quán giữa hai collection.
+

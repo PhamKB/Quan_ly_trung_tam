@@ -1,24 +1,36 @@
 export type Role = 'ADMIN' | 'OWNER' | 'ACADEMIC_STAFF' | 'ACCOUNTANT' | 'TEACHER' | 'STUDENT' | 'PARENT';
 
+export type StudentStatus = 'ACTIVE' | 'INACTIVE' | 'TRANSFERRED' | 'GRADUATED' | 'Đang học' | 'Tạm ngừng' | 'Chuyển trường' | 'Đã tốt nghiệp';
+export type ParentRelationship = 'Cha' | 'Mẹ' | 'Người giám hộ' | 'CHA' | 'ME' | 'NGUOI_GIAM_HO';
+
 export interface Student {
-  id: string;
+  id: string; // e.g. STU-2026-001
+  studentId?: string;
+  userId?: string | null;
+  username?: string;
   name: string;
-  classId: string;
-  className: string;
-  course: string;
-  gpa: number;
-  attendanceRate: number;
-  homeworkCompletion: number;
-  riskScore: number; // 0-100
-  riskLevel: 'Low' | 'Medium' | 'High';
-  avatar?: string;
-  email: string;
-  phone: string;
-  tuitionOwed: number;
-  tuitionPaid: number;
+  fullName?: string;
+  dateOfBirth?: string;
+  gender?: 'Nam' | 'Nữ' | 'Khác' | string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  grade: number; // strictly 6, 7, 8, 9
+  status: StudentStatus | string;
+  parentIds?: string[];
   parentId?: string;
   parentName?: string;
-  status?: string;
+  classId?: string;
+  className?: string;
+  course?: string;
+  gpa?: number;
+  attendanceRate?: number;
+  homeworkCompletion?: number;
+  riskScore?: number; // 0-100
+  riskLevel?: 'Low' | 'Medium' | 'High';
+  avatar?: string;
+  tuitionOwed?: number;
+  tuitionPaid?: number;
   financials?: {
     baseFee: number;
     discount: number;
@@ -27,20 +39,123 @@ export interface Student {
     tuitionOwed: number;
     status: string;
   };
+  createdAt?: string;
+  updatedAt?: string;
 }
+
+export interface Parent {
+  id: string; // e.g. PAR-2026-001
+  parentId?: string;
+  userId?: string | null;
+  username?: string;
+  name: string;
+  fullName?: string;
+  relationship: ParentRelationship | string;
+  phone: string;
+  email: string;
+  address?: string;
+  job?: string;
+  studentIds?: string[];
+  childIds?: string[];
+  status: 'ACTIVE' | 'INACTIVE' | 'Đang hoạt động' | 'Tạm ngừng' | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type ClassStatus = 'ACTIVE' | 'INACTIVE' | 'COMPLETED' | 'Đang hoạt động' | 'Tạm ngừng' | 'Đã kết thúc' | 'Sắp khai giảng';
+export type EnrollmentStatus = 'ACTIVE' | 'TRANSFERRED' | 'COMPLETED' | 'CANCELLED' | 'Đang học' | 'Đã chuyển lớp' | 'Đã hoàn thành' | 'Đã hủy';
 
 export interface Class {
   id: string;
+  classId?: string;
+  classCode?: string;
+  className?: string;
   name: string;
-  course: string;
-  teacher: string;
-  room: string;
-  schedule: string;
-  studentsCount: number;
-  capacity: number;
-  status: 'Đang hoạt động' | 'Sắp khai giảng' | 'Đã hoàn thành';
-  averageGpa: number;
-  subject: string;
+  grade: number; // strictly 6, 7, 8, 9
+  academicYear: string; // e.g. 2026-2027
+  capacity: number; // default 18
+  studentsCount?: number;
+  status: ClassStatus;
+  course?: string;
+  teacher?: string;
+  room?: string;
+  schedule?: string;
+  averageGpa?: number;
+  subject?: string;
+  teachers?: Record<string, string>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ClassEnrollment {
+  id: string;
+  enrollmentId?: string;
+  studentId: string;
+  studentName?: string;
+  classId: string;
+  className?: string;
+  grade?: number;
+  academicYear: string;
+  startDate: string;
+  endDate?: string;
+  status: EnrollmentStatus;
+  reason?: string;
+  fromClassId?: string;
+  toClassId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type SubjectId = 'toan' | 'van' | 'anh' | 'ly' | 'hoa';
+export type SubjectCode = 'TOAN' | 'NGU_VAN' | 'TIENG_ANH' | 'VAT_LY' | 'HOA_HOC';
+
+export interface Subject {
+  id: string;
+  subjectId?: string;
+  name: string;
+  code: string;
+  category?: string;
+  description?: string;
+}
+
+export type TeacherStatus = 'ACTIVE' | 'INACTIVE' | 'Đang làm việc' | 'Tạm nghỉ' | 'Đã nghỉ';
+
+export interface Teacher {
+  id: string;
+  teacherId?: string;
+  userId?: string | null;
+  employeeCode?: string;
+  name: string;
+  fullName?: string;
+  phone?: string;
+  email: string;
+  subjectId: string; // Invariant: Exactly 1 subject
+  subjectCode?: string;
+  subjectName?: string;
+  department?: string;
+  status: TeacherStatus | string;
+  avatar?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type AssignmentStatus = 'ACTIVE' | 'INACTIVE' | 'COMPLETED' | 'Đang dạy' | 'Tạm ngừng' | 'Đã kết thúc';
+
+export interface TeacherAssignment {
+  id: string;
+  assignmentId?: string;
+  teacherId: string;
+  teacherName?: string;
+  classId: string;
+  className?: string;
+  subjectId: string;
+  subjectName?: string;
+  academicYear: string;
+  status: AssignmentStatus | string;
+  startDate: string;
+  endDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Course {
@@ -121,13 +236,20 @@ export interface Score {
 
 export interface User {
   id: string;
+  username?: string;
+  passwordHash?: string;
+  mustChangePassword?: boolean;
+  studentId?: string;
+  parentId?: string;
   name: string;
   email: string;
   role: Role;
   department: string;
   school: string;
-  status: 'Đang hoạt động' | 'Tạm khóa';
+  status: 'Đang hoạt động' | 'Tạm khóa' | 'ACTIVE' | 'INACTIVE' | string;
   avatar?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Employee {
@@ -151,12 +273,7 @@ export interface AuditLog {
   ip: string;
   status: 'Success' | 'Warning' | 'Critical';
   details: string;
-  metadata?: {
-    requestId: string;
-    before: string;
-    after: string;
-    userAgent: string;
-  };
+  metadata?: Record<string, any>;
 }
 
 export interface AppNotification {

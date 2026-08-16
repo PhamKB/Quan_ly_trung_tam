@@ -63,13 +63,22 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "parentId": { "type": "string" },
+        "userId": { "type": "string" },
         "name": { "type": "string" },
+        "fullName": { "type": "string" },
+        "relationship": { "type": "string" },
         "email": { "type": "string" },
         "phone": { "type": "string" },
+        "address": { "type": "string" },
         "job": { "type": "string" },
-        "childIds": { "type": "array" }
+        "studentIds": { "type": "array" },
+        "childIds": { "type": "array" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
       },
-      "required": ["id", "name", "email", "childIds"]
+      "required": ["id", "name", "phone"]
     },
     "Student": {
       "title": "Student",
@@ -77,14 +86,21 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "userId": { "type": "string" },
         "name": { "type": "string" },
+        "fullName": { "type": "string" },
+        "dateOfBirth": { "type": "string" },
+        "gender": { "type": "string" },
         "classId": { "type": "string" },
         "className": { "type": "string" },
         "course": { "type": "string" },
         "grade": { "type": "number" },
         "email": { "type": "string" },
         "phone": { "type": "string" },
+        "address": { "type": "string" },
         "parentId": { "type": "string" },
+        "parentIds": { "type": "array" },
         "parentName": { "type": "string" },
         "gpa": { "type": "number" },
         "attendanceRate": { "type": "number" },
@@ -94,9 +110,11 @@
         "tuitionPaid": { "type": "number" },
         "tuitionOwed": { "type": "number" },
         "status": { "type": "string" },
-        "financials": { "type": "object" }
+        "financials": { "type": "object" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
       },
-      "required": ["id", "name", "classId", "className", "grade", "email", "parentId", "gpa", "attendanceRate", "homeworkCompletion", "riskScore", "riskLevel", "tuitionPaid", "tuitionOwed", "status"]
+      "required": ["id", "name", "grade", "status"]
     },
     "ClassEnrollment": {
       "title": "ClassEnrollment",

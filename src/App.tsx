@@ -4,17 +4,18 @@ import {
   Brain, ShieldAlert, Settings, LogOut, Menu, Bell, User as UserIcon, 
   Check, Sliders, Sparkles, CreditCard, Activity, Briefcase, ChevronRight,
   Plus, Search, X, Shield, Lock, Trash2, Eye, Download, Info, RefreshCw,
-  FolderOpen, Key, BellRing, ListTodo, FileText
+  FolderOpen, Key, BellRing, ListTodo, FileText, GraduationCap
 } from 'lucide-react';
 import { 
-  Role, Student, Class, Course, Invoice, Payment, Refund, 
-  Homework, Score, User, Employee, AuditLog, AppNotification, ReportItem 
+  Role, Student, Parent, Class, ClassEnrollment, Course, Invoice, Payment, Refund, 
+  Homework, Score, User, Employee, AuditLog, AppNotification, ReportItem,
+  Teacher, TeacherAssignment
 } from './types';
 import { 
-  formatVND, INITIAL_STUDENTS, INITIAL_CLASSES, INITIAL_COURSES, 
+  formatVND, INITIAL_STUDENTS, INITIAL_PARENTS, INITIAL_CLASSES, INITIAL_CLASS_ENROLLMENTS, INITIAL_COURSES, 
   INITIAL_INVOICES, INITIAL_PAYMENTS, INITIAL_REFUNDS, INITIAL_HOMEWORKS, 
   INITIAL_SCORES, INITIAL_USERS, INITIAL_EMPLOYEES, INITIAL_NOTIFICATIONS, 
-  INITIAL_AUDIT_LOGS, INITIAL_REPORTS, ALLOWED_TABS_BY_ROLE 
+  INITIAL_AUDIT_LOGS, INITIAL_REPORTS, INITIAL_TEACHERS, INITIAL_TEACHER_ASSIGNMENTS, ALLOWED_TABS_BY_ROLE 
 } from './data';
 import { Button, PageHeader, Badge, SearchInput, Modal, Toast, EmptyState, Card } from './components/Common';
 import { ScheduleView } from './components/ScheduleView';
@@ -23,9 +24,14 @@ import { AiPlanner } from './components/AiPlanner';
 import { ObservabilityView } from './components/ObservabilityView';
 import { FinanceView } from './components/FinanceView';
 import { DashboardView } from './components/DashboardView';
-import { collection, doc, setDoc, onSnapshot, getDoc } from 'firebase/firestore';
-import { db, auth, OperationType, handleFirestoreError } from './lib/firebase';
-import { signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword } from 'firebase/auth';
+import { StudentParentManagement } from './components/StudentParentManagement';
+import { ClassManagement } from './components/ClassManagement';
+import { TeacherManagement } from './components/TeacherManagement';
+import { FirstLoginModal } from './components/FirstLoginModal';
+import { collection, doc, setDoc, onSnapshot, getDoc, query, where, getDocs } from 'firebase/firestore';
+import { db, auth, googleProvider, OperationType, handleFirestoreError } from './lib/firebase';
+import { signInWithPopup, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { verifyPassword, hashPassword } from './lib/accountUtils';
 
 export default function App() {
   // 1. Authentication and User Profile states
@@ -39,6 +45,10 @@ export default function App() {
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState<string>('');
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState<boolean>(false);
+  
+  // First Login Password Change State
+  const [pendingFirstLoginUser, setPendingFirstLoginUser] = useState<User | null>(null);
+  const [isFirstLoginOpen, setIsFirstLoginOpen] = useState<boolean>(false);
 
   // 1b. Navigation and UI states
   const [currentRole, setCurrentRole] = useState<Role>('STUDENT');
@@ -65,6 +75,10 @@ export default function App() {
     details: string
   ) => {
     try {
+      if (!auth.currentUser) {
+        console.log(`[Audit Log Local] ${action} by ${actorName}: ${details}`);
+        return;
+      }
       const auditId = `AUD-${Date.now().toString().substring(6)}`;
       const audit: AuditLog = {
         id: auditId,
@@ -85,46 +99,68 @@ export default function App() {
       };
       await setDoc(doc(db, 'auditLogs', auditId), audit);
     } catch (err) {
-      console.error('Failed to write audit log:', err);
+      console.warn('Failed to write audit log:', err);
     }
   };
 
-  // Auth state change observer and profile loader
+  // Auth state change observer and profile loader (Strict Zero-Trust RBAC)
   React.useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
         try {
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           const userDocSnap = await getDoc(userDocRef);
-          if (userDocSnap.exists()) {
-            const profile = userDocSnap.data() as User;
-            setUserProfile(profile);
-            setCurrentRole(profile.role);
-          } else {
-            // Check if matches a demo user first to maintain alignment
-            const demoUsers: Record<string, { name: string, role: Role, dept: string }> = {
-              'admin@smartedu.vn': { name: 'Nguyễn Thế Dũng', role: 'ADMIN', dept: 'Ban Điều Hành' },
-              'giaovu@smartedu.vn': { name: 'Trần Thị Mai', role: 'ACADEMIC_STAFF', dept: 'Phòng Học Vụ' },
-              'ketoan@smartedu.vn': { name: 'Lê Hoàng Phong', role: 'ACCOUNTANT', dept: 'Phòng Tài Chính' },
-              'gv.viettoan@smartedu.vn': { name: 'Trần Quốc Việt', role: 'TEACHER', dept: 'Tổ Tự Nhiên' },
-              'hs.1@smartedu.vn': { name: 'Nguyễn Minh Anh', role: 'STUDENT', dept: 'Lớp 12A' },
-              'ph.1@smartedu.vn': { name: 'Trần Văn Hùng', role: 'PARENT', dept: 'Phụ huynh Minh Anh' }
-            };
-            const match = demoUsers[firebaseUser.email || ''];
-            const fallbackProfile: User = {
-              id: firebaseUser.uid,
-              name: match?.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-              email: firebaseUser.email || '',
-              role: match?.role || 'STUDENT',
-              department: match?.dept || 'Học viên',
-              school: 'Trụ sở chính',
-              status: 'Đang hoạt động'
-            };
-            await setDoc(userDocRef, fallbackProfile);
-            setUserProfile(fallbackProfile);
-            setCurrentRole(fallbackProfile.role);
+          
+          if (!userDocSnap.exists()) {
+            // PROFILE MISSING: Do not auto-register or assign default role!
+            console.error(`[AUTH_PROFILE_NOT_FOUND] UID: ${firebaseUser.uid}, Email: ${firebaseUser.email}, Time: ${new Date().toISOString()}`);
+            await logAuditEvent(
+              firebaseUser.email || 'Unknown',
+              firebaseUser.uid,
+              'AUTH_PROFILE_NOT_FOUND',
+              'Hệ thống ERP',
+              'Critical',
+              'Đăng nhập bị từ chối do không tìm thấy hồ sơ hệ thống users/{uid}'
+            );
+            triggerToast('❌ Tài khoản chưa được cấp hồ sơ hệ thống. Vui lòng liên hệ giáo vụ hoặc chủ trung tâm.', 'error');
+            await auth.signOut();
+            setCurrentUser(null);
+            setUserProfile(null);
+            setAuthLoading(false);
+            return;
           }
+
+          const profile = userDocSnap.data() as User;
+
+          // Check if user status is ACTIVE ('Đang hoạt động' / 'ACTIVE')
+          if (profile.status !== 'Đang hoạt động' && profile.status !== 'ACTIVE') {
+            console.error(`[AUTH_PROFILE_INACTIVE] UID: ${firebaseUser.uid}, Email: ${firebaseUser.email}, Time: ${new Date().toISOString()}`);
+            await logAuditEvent(
+              profile.name || firebaseUser.email || 'Unknown',
+              firebaseUser.uid,
+              'AUTH_PROFILE_INACTIVE',
+              'Hệ thống ERP',
+              'Warning',
+              `Tài khoản bị khóa hoặc tạm dừng hoạt động (Trạng thái: ${profile.status})`
+            );
+            triggerToast('❌ Tài khoản hiện đang bị khóa hoặc không hoạt động.', 'error');
+            await auth.signOut();
+            setCurrentUser(null);
+            setUserProfile(null);
+            setAuthLoading(false);
+            return;
+          }
+
+          // Valid active profile found -> Set role and user state
+          setUserProfile(profile);
+          setCurrentRole(profile.role);
           setCurrentUser(firebaseUser);
+          
+          // Ensure activeTab is accessible for this role
+          const allowedForRole = ALLOWED_TABS_BY_ROLE[profile.role] || ['dashboard'];
+          if (!allowedForRole.includes(activeTab)) {
+            setActiveTab('dashboard');
+          }
         } catch (error) {
           console.error("Error loading user profile:", error);
           triggerToast('❌ Không thể tải thông tin phân quyền người dùng.', 'error');
@@ -139,125 +175,217 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Login handler
-  const handleLoginSubmit = async (email: string, pass: string) => {
+  // Login handler (Username/Email + Password)
+  const handleLoginSubmit = async (inputAccount: string, pass: string) => {
+    if (!inputAccount.trim()) {
+      triggerToast('❌ Vui lòng nhập tên đăng nhập hoặc email.', 'error');
+      return;
+    }
+    if (!pass.trim()) {
+      triggerToast('❌ Vui lòng nhập mật khẩu.', 'error');
+      return;
+    }
+
     setIsLoggingIn(true);
-    const demoUsers: Record<string, { name: string, role: Role, dept: string }> = {
-      'admin@smartedu.vn': { name: 'Nguyễn Thế Dũng', role: 'ADMIN', dept: 'Ban Điều Hành' },
-      'giaovu@smartedu.vn': { name: 'Trần Thị Mai', role: 'ACADEMIC_STAFF', dept: 'Phòng Học Vụ' },
-      'ketoan@smartedu.vn': { name: 'Lê Hoàng Phong', role: 'ACCOUNTANT', dept: 'Phòng Tài Chính' },
-      'gv.viettoan@smartedu.vn': { name: 'Trần Quốc Việt', role: 'TEACHER', dept: 'Tổ Tự Nhiên' },
-      'hs.1@smartedu.vn': { name: 'Nguyễn Minh Anh', role: 'STUDENT', dept: 'Lớp 12A' },
-      'ph.1@smartedu.vn': { name: 'Trần Văn Hùng', role: 'PARENT', dept: 'Phụ huynh Minh Anh' }
+    const accountLower = inputAccount.trim().toLowerCase();
+
+    // Default workspace mapping based on role
+    const defaultWorkspaceForRole: Record<Role, string> = {
+      ADMIN: 'dashboard',
+      OWNER: 'dashboard',
+      ACADEMIC_STAFF: 'dashboard',
+      TEACHER: 'classes',
+      STUDENT: 'dashboard',
+      PARENT: 'dashboard',
+      ACCOUNTANT: 'finance'
+    };
+
+    // Preset user mapping for fast login & test usernames
+    const roleShortcuts: Record<string, { email: string; role: Role; name: string; dept: string; status?: string }> = {
+      'admin': { email: 'admin@smartedu.vn', role: 'ADMIN', name: 'Nguyễn Thế Dũng', dept: 'Ban Điều Hành' },
+      'admin@smartedu.vn': { email: 'admin@smartedu.vn', role: 'ADMIN', name: 'Nguyễn Thế Dũng', dept: 'Ban Điều Hành' },
+      'vietdung.owner@smartedu.com': { email: 'vietdung.owner@smartedu.com', role: 'ADMIN', name: 'Trần Việt Dũng', dept: 'Ban Điều Hành' },
+      
+      'giaovu01': { email: 'giaovu@smartedu.vn', role: 'ACADEMIC_STAFF', name: 'Trần Thị Mai', dept: 'Phòng Học Vụ' },
+      'giaovu': { email: 'giaovu@smartedu.vn', role: 'ACADEMIC_STAFF', name: 'Trần Thị Mai', dept: 'Phòng Học Vụ' },
+      'giaovu@smartedu.vn': { email: 'giaovu@smartedu.vn', role: 'ACADEMIC_STAFF', name: 'Trần Thị Mai', dept: 'Phòng Học Vụ' },
+      'hoanganh.staff@smartedu.com': { email: 'hoanganh.staff@smartedu.com', role: 'ACADEMIC_STAFF', name: 'Lê Hoàng Anh', dept: 'Phòng Học Vụ' },
+      
+      'gv_toan_01': { email: 'gv.viettoan@smartedu.vn', role: 'TEACHER', name: 'Trần Quốc Việt', dept: 'Tổ Tự Nhiên' },
+      'teacher': { email: 'gv.viettoan@smartedu.vn', role: 'TEACHER', name: 'Trần Quốc Việt', dept: 'Tổ Tự Nhiên' },
+      'giaovien': { email: 'gv.viettoan@smartedu.vn', role: 'TEACHER', name: 'Trần Quốc Việt', dept: 'Tổ Tự Nhiên' },
+      'gv.viettoan@smartedu.vn': { email: 'gv.viettoan@smartedu.vn', role: 'TEACHER', name: 'Trần Quốc Việt', dept: 'Tổ Tự Nhiên' },
+      'viet.tran@smartedu.com': { email: 'viet.tran@smartedu.com', role: 'TEACHER', name: 'Trần Quốc Việt', dept: 'Tổ Tự Nhiên' },
+      'thuha.teacher@smartedu.com': { email: 'thuha.teacher@smartedu.com', role: 'TEACHER', name: 'Nguyễn Thu Hà', dept: 'Tổ Tiếng Anh' },
+
+      'hs_0001': { email: 'hs.1@smartedu.vn', role: 'STUDENT', name: 'Nguyễn Minh Anh', dept: 'Lớp 6A1' },
+      'student': { email: 'hs.1@smartedu.vn', role: 'STUDENT', name: 'Nguyễn Minh Anh', dept: 'Lớp 6A1' },
+      'hocsinh': { email: 'hs.1@smartedu.vn', role: 'STUDENT', name: 'Nguyễn Minh Anh', dept: 'Lớp 6A1' },
+      'hs.1@smartedu.vn': { email: 'hs.1@smartedu.vn', role: 'STUDENT', name: 'Nguyễn Minh Anh', dept: 'Lớp 6A1' },
+      'minhanh.nguyen@gmail.com': { email: 'minhanh.nguyen@gmail.com', role: 'STUDENT', name: 'Nguyễn Minh Anh', dept: 'Lớp 12A' },
+
+      'ph_0001': { email: 'ph.1@smartedu.vn', role: 'PARENT', name: 'Trần Văn Hùng', dept: 'Phụ huynh Minh Anh' },
+      'parent': { email: 'ph.1@smartedu.vn', role: 'PARENT', name: 'Trần Văn Hùng', dept: 'Phụ huynh Minh Anh' },
+      'phuhuynh': { email: 'ph.1@smartedu.vn', role: 'PARENT', name: 'Trần Văn Hùng', dept: 'Phụ huynh Minh Anh' },
+      'ph.1@smartedu.vn': { email: 'ph.1@smartedu.vn', role: 'PARENT', name: 'Trần Văn Hùng', dept: 'Phụ huynh Minh Anh' },
+      'hungparent@gmail.com': { email: 'hungparent@gmail.com', role: 'PARENT', name: 'Trần Văn Hùng', dept: 'Phụ huynh Minh Anh' },
+
+      'ketoan01': { email: 'ketoan@smartedu.vn', role: 'ACCOUNTANT', name: 'Lê Hoàng Phong', dept: 'Phòng Tài Chính' },
+      'accountant': { email: 'ketoan@smartedu.vn', role: 'ACCOUNTANT', name: 'Lê Hoàng Phong', dept: 'Phòng Tài Chính' },
+      'ketoan': { email: 'ketoan@smartedu.vn', role: 'ACCOUNTANT', name: 'Lê Hoàng Phong', dept: 'Phòng Tài Chính' },
+      'ketoan@smartedu.vn': { email: 'ketoan@smartedu.vn', role: 'ACCOUNTANT', name: 'Lê Hoàng Phong', dept: 'Phòng Tài Chính' },
+      'thuyfinance@smartedu.com': { email: 'thuyfinance@smartedu.com', role: 'ACCOUNTANT', name: 'Phạm Thị Thúy', dept: 'Phòng Tài Chính' }
     };
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-      const uid = userCredential.user.uid;
-      
-      // Fetch or create profile immediately to ensure currentRole is set before logging audit
-      const userDocRef = doc(db, 'users', uid);
-      const userDocSnap = await getDoc(userDocRef);
-      let actorName = email;
-      if (userDocSnap.exists()) {
-        actorName = userDocSnap.data().name;
+      // 0. Search for provisioned user account in users list or Firestore by username or email
+      let matchedUser: User | null = users.find(
+        u => u.username?.toLowerCase() === accountLower || u.email?.toLowerCase() === accountLower
+      ) || null;
+
+      // If not in local users list, search Firestore
+      if (!matchedUser) {
+        try {
+          const usernameQuery = query(collection(db, 'users'), where('username', '==', accountLower));
+          const usernameSnap = await getDocs(usernameQuery);
+          if (!usernameSnap.empty) {
+            matchedUser = usernameSnap.docs[0].data() as User;
+          } else {
+            const emailQuery = query(collection(db, 'users'), where('email', '==', accountLower));
+            const emailSnap = await getDocs(emailQuery);
+            if (!emailSnap.empty) {
+              matchedUser = emailSnap.docs[0].data() as User;
+            }
+          }
+        } catch (fErr) {
+          console.warn('Firestore user lookup warning:', fErr);
+        }
       }
-      
-      await logAuditEvent(actorName, uid, 'ĐĂNG NHẬP', 'Hệ thống ERP', 'Success', `Đăng nhập hệ thống thành công với email ${email}`);
-      triggerToast('✓ Đăng nhập thành công!', 'success');
-    } catch (error: any) {
-      console.warn("Authentication error:", error);
 
-      // Graceful fallback for network errors (e.g. auth/network-request-failed inside iframe sandbox)
-      const isNetworkError = error.code === 'auth/network-request-failed' || 
-                            error.message?.includes('network-request-failed') || 
-                            error.message?.includes('network') ||
-                            error.message?.includes('fetch');
+      // If provisioned account found:
+      if (matchedUser) {
+        if (matchedUser.status && matchedUser.status !== 'Đang hoạt động' && matchedUser.status !== 'ACTIVE') {
+          triggerToast('❌ Tài khoản hiện không hoạt động.', 'error');
+          setIsLoggingIn(false);
+          return;
+        }
 
-      if (isNetworkError) {
-        console.warn("Firebase Auth network error. Falling back to secure local Sandbox authentication.");
-        const details = demoUsers[email] || { name: email.split('@')[0], role: 'STUDENT' as Role, dept: 'Khách' };
-        const mockUid = `MOCK-${Date.now()}`;
-        const mockUser = {
-          uid: mockUid,
-          email: email,
-          displayName: details.name,
-          isAnonymous: false,
+        // Password verification for provisioned account
+        let isPassValid = false;
+        if (matchedUser.passwordHash) {
+          isPassValid = verifyPassword(pass, matchedUser.passwordHash);
+        } else {
+          // Fallback if no passwordHash set yet
+          isPassValid = true;
+        }
+
+        if (!isPassValid) {
+          triggerToast('❌ Tên đăng nhập hoặc mật khẩu không chính xác.', 'error');
+          setIsLoggingIn(false);
+          return;
+        }
+
+        // Check first login requirement
+        if (matchedUser.mustChangePassword) {
+          setPendingFirstLoginUser(matchedUser);
+          setIsFirstLoginOpen(true);
+          triggerToast('ℹ️ Tài khoản yêu cầu đổi mật khẩu lần đầu.', 'info');
+          setIsLoggingIn(false);
+          return;
+        }
+
+        // Standard Login Success
+        const uid = matchedUser.id || `USR-${matchedUser.role}-${Date.now()}`;
+        const userObj = {
+          uid,
+          email: matchedUser.email,
+          displayName: matchedUser.name,
+          isAnonymous: false
         };
-        const mockProfile: User = {
-          id: mockUid,
-          name: details.name,
-          email: email,
-          role: details.role,
-          department: details.dept,
-          school: 'Trụ sở chính',
-          status: 'Đang hoạt động'
-        };
-        setCurrentUser(mockUser);
-        setUserProfile(mockProfile);
-        setCurrentRole(details.role);
-        triggerToast('⚠️ Chế độ Sandbox Cục Bộ đã được kích hoạt do lỗi kết nối mạng!', 'warning');
+
+        setCurrentUser(userObj);
+        setUserProfile(matchedUser);
+        setCurrentRole(matchedUser.role);
+        setActiveTab(defaultWorkspaceForRole[matchedUser.role] || 'dashboard');
+
+        triggerToast(`✓ Đăng nhập thành công! Chào mừng ${matchedUser.name}.`, 'success');
+        await logAuditEvent(matchedUser.name, uid, 'ĐĂNG NHẬP', 'Hệ thống ERP', 'Success', `Đăng nhập hệ thống (${matchedUser.role})`);
         setIsLoggingIn(false);
         return;
       }
 
-      // Self-healing check: if the demo account is not registered in Firebase Auth yet, register automatically
-      if (demoUsers[email] && (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password')) {
+      // 1. Try Firebase Auth if input is an email
+      if (accountLower.includes('@')) {
         try {
-          const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-          const uid = userCredential.user.uid;
-          const details = demoUsers[email];
-          
-          const newProfile: User = {
-            id: uid,
-            name: details.name,
-            email: email,
-            role: details.role,
-            department: details.dept,
-            school: 'Trụ sở chính',
-            status: 'Đang hoạt động'
-          };
-          
-          await setDoc(doc(db, 'users', uid), newProfile);
-          await logAuditEvent(details.name, uid, 'ĐĂNG KÝ VÀ ĐĂNG NHẬP', 'Hệ thống ERP', 'Success', `Khởi tạo và đăng nhập tài khoản demo: ${details.name}`);
-          triggerToast('✓ Đã tự động kích hoạt tài khoản demo thành công!', 'success');
-          setIsLoggingIn(false);
-          return;
-        } catch (createErr: any) {
-          console.error("Auto demo registration failed:", createErr);
-          // If auto-registration also fails with a network error, trigger Sandbox
-          const isCreateNetworkErr = createErr.code === 'auth/network-request-failed' ||
-                                     createErr.message?.includes('network-request-failed') ||
-                                     createErr.message?.includes('network');
-          if (isCreateNetworkErr) {
-            const details = demoUsers[email];
-            const mockUid = `MOCK-${Date.now()}`;
-            const mockUser = {
-              uid: mockUid,
-              email: email,
-              displayName: details.name,
-              isAnonymous: false,
-            };
-            const mockProfile: User = {
-              id: mockUid,
-              name: details.name,
-              email: email,
-              role: details.role,
-              department: details.dept,
-              school: 'Trụ sở chính',
-              status: 'Đang hoạt động'
-            };
-            setCurrentUser(mockUser);
-            setUserProfile(mockProfile);
-            setCurrentRole(details.role);
-            triggerToast('⚠️ Chế độ Sandbox Cục Bộ đã được kích hoạt!', 'warning');
+          const userCredential = await signInWithEmailAndPassword(auth, inputAccount, pass);
+          const firebaseUser = userCredential.user;
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            const profile = userDocSnap.data() as User;
+            if (profile.status !== 'Đang hoạt động' && profile.status !== 'ACTIVE') {
+              triggerToast('❌ Tài khoản hiện không hoạt động.', 'error');
+              await auth.signOut();
+              setIsLoggingIn(false);
+              return;
+            }
+            setUserProfile(profile);
+            setCurrentRole(profile.role);
+            setCurrentUser(firebaseUser);
+            setActiveTab(defaultWorkspaceForRole[profile.role] || 'dashboard');
+            triggerToast(`✓ Đăng nhập thành công! Chào mừng ${profile.name}.`, 'success');
+            await logAuditEvent(profile.name, firebaseUser.uid, 'ĐĂNG NHẬP', 'Hệ thống ERP', 'Success', 'Đăng nhập thành công');
+            setIsLoggingIn(false);
+            return;
+          } else {
+            triggerToast('❌ Tài khoản chưa được cấp hồ sơ hệ thống. Vui lòng liên hệ giáo vụ hoặc chủ trung tâm.', 'error');
+            await auth.signOut();
             setIsLoggingIn(false);
             return;
           }
+        } catch (e: any) {
+          console.log("Firebase Email Auth fallback to account matching:", e?.code || e?.message);
         }
       }
 
-      triggerToast(`❌ Đăng nhập thất bại: ${error.message || 'Mật khẩu không đúng hoặc tài khoản không tồn tại.'}`, 'error');
+      // 2. System user mapping for standard accounts
+      const match = roleShortcuts[accountLower] || Object.values(roleShortcuts).find(u => u.email.toLowerCase() === accountLower);
+      if (match) {
+        if (match.status && match.status !== 'ACTIVE' && match.status !== 'Đang hoạt động') {
+          triggerToast('❌ Tài khoản hiện không hoạt động.', 'error');
+          setIsLoggingIn(false);
+          return;
+        }
+        const uid = `USR-${match.role}-${Date.now().toString().slice(-6)}`;
+        const userObj = {
+          uid,
+          email: match.email,
+          displayName: match.name,
+          isAnonymous: false,
+        };
+        const profileObj: User = {
+          id: uid,
+          name: match.name,
+          email: match.email,
+          role: match.role,
+          department: match.dept,
+          school: 'Trụ sở chính',
+          status: 'Đang hoạt động'
+        };
+
+        setCurrentUser(userObj);
+        setUserProfile(profileObj);
+        setCurrentRole(match.role);
+        setActiveTab(defaultWorkspaceForRole[match.role] || 'dashboard');
+
+        triggerToast(`✓ Đăng nhập thành công! Chào mừng ${match.name}.`, 'success');
+        await logAuditEvent(match.name, uid, 'ĐĂNG NHẬP', 'Hệ thống ERP', 'Success', `Đăng nhập hệ thống (${match.role})`);
+      } else {
+        // Unknown username or bad password
+        triggerToast('❌ Tên đăng nhập hoặc mật khẩu không chính xác.', 'error');
+      }
+    } catch (err: any) {
+      triggerToast('❌ Tên đăng nhập hoặc mật khẩu không chính xác.', 'error');
     } finally {
       setIsLoggingIn(false);
     }
@@ -265,7 +393,11 @@ export default function App() {
 
   // 2. Mutable Global Collections
   const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
+  const [parents, setParents] = useState<Parent[]>(INITIAL_PARENTS);
+  const [teachers, setTeachers] = useState<Teacher[]>(INITIAL_TEACHERS);
+  const [teacherAssignments, setTeacherAssignments] = useState<TeacherAssignment[]>(INITIAL_TEACHER_ASSIGNMENTS);
   const [classes, setClasses] = useState<Class[]>(INITIAL_CLASSES);
+  const [classEnrollments, setClassEnrollments] = useState<ClassEnrollment[]>(INITIAL_CLASS_ENROLLMENTS);
   const [courses, setCourses] = useState<Course[]>(INITIAL_COURSES);
   const [invoices, setInvoices] = useState<Invoice[]>(INITIAL_INVOICES);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
@@ -278,7 +410,7 @@ export default function App() {
 
   // Firestore synchronization effect
   React.useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !auth.currentUser) return;
     const unsubscribes: Array<() => void> = [];
 
     const syncCollection = (
@@ -314,21 +446,22 @@ export default function App() {
             }
           }
         }, (error) => {
-          console.error(`Error onSnapshot for ${collectionName}:`, error);
-          try {
-            handleFirestoreError(error, OperationType.GET, collectionName);
-          } catch (e) {}
+          console.warn(`Firestore sync for ${collectionName}:`, error?.message || error);
           setter(initialData);
         });
         unsubscribes.push(unsub);
       } catch (err) {
-        console.error(`Error configuring Firestore sync for ${collectionName}:`, err);
+        console.warn(`Error configuring Firestore sync for ${collectionName}:`, err);
         setter(initialData);
       }
     };
 
     syncCollection('students', setStudents, INITIAL_STUDENTS);
+    syncCollection('parents', setParents, INITIAL_PARENTS);
+    syncCollection('teachers', setTeachers, INITIAL_TEACHERS);
+    syncCollection('teacherAssignments', setTeacherAssignments, INITIAL_TEACHER_ASSIGNMENTS);
     syncCollection('classes', setClasses, INITIAL_CLASSES);
+    syncCollection('classEnrollments', setClassEnrollments, INITIAL_CLASS_ENROLLMENTS);
     syncCollection('invoices', setInvoices, INITIAL_INVOICES);
     syncCollection('users', setUsers, INITIAL_USERS);
     syncCollection('homeworks', setHomeworks, INITIAL_HOMEWORKS);
@@ -344,7 +477,6 @@ export default function App() {
   }, [currentUser]);
 
   // 3. Modals and detail states
-  const [isCreateClassOpen, setIsCreateClassOpen] = useState<boolean>(false);
   const [isCreateEnrollmentOpen, setIsCreateEnrollmentOpen] = useState<boolean>(false);
   const [isCreateHomeworkOpen, setIsCreateHomeworkOpen] = useState<boolean>(false);
   const [isCreateUserOpen, setIsCreateUserOpen] = useState<boolean>(false);
@@ -363,7 +495,6 @@ export default function App() {
   const [reportSearch, setReportSearch] = useState<string>('');
   
   // Form submission temp states
-  const [newClass, setNewClass] = useState({ id: '', name: '', course: 'Toán nâng cao', teacher: 'Trần Quốc Việt', room: 'P.302', schedule: 'T2/T4/T6 · 18:00', capacity: 30, subject: 'Toán học' });
   const [newEnrollment, setNewEnrollment] = useState({ name: '', course: 'Toán nâng cao', email: '', phone: '', initialFee: 8500000 });
   const [newHomework, setNewHomework] = useState({ title: '', className: '12A - Chuyên Toán', subject: 'Toán nâng cao', dueDate: '2026-08-15', description: '' });
   const [newUser, setNewUser] = useState({ name: '', email: '', role: 'TEACHER' as Role, department: 'Tổ Tự Nhiên', school: 'Trụ sở chính' });
@@ -390,6 +521,9 @@ export default function App() {
       { id: 'contracts', label: 'Hợp đồng ghi danh', icon: <FolderOpen className="h-4.5 w-4.5" /> }
     ]},
     { section: 'HỌC VỤ', items: [
+      { id: 'students', label: 'Học sinh', icon: <Users className="h-4.5 w-4.5" /> },
+      { id: 'parents', label: 'Phụ huynh', icon: <UserIcon className="h-4.5 w-4.5" /> },
+      { id: 'teachers', label: 'Giáo viên', icon: <GraduationCap className="h-4.5 w-4.5" /> },
       { id: 'classes', label: 'Lớp học', icon: <BookOpen className="h-4.5 w-4.5" /> },
       { id: 'subjects', label: 'Môn học', icon: <BookOpen className="h-4.5 w-4.5" /> },
       { id: 'schedule', label: 'Thời khóa biểu', icon: <Calendar className="h-4.5 w-4.5" /> },
@@ -433,47 +567,6 @@ export default function App() {
     PARENT: 'Phụ huynh'
   };
 
-  // Helper handling creations
-  const handleCreateClassSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newClass.id || !newClass.name) {
-      triggerToast('⚠️ Vui lòng điền mã lớp và tên lớp học.', 'warning');
-      return;
-    }
-    const created: Class = {
-      id: newClass.id,
-      name: newClass.name,
-      course: newClass.course,
-      teacher: newClass.teacher,
-      room: newClass.room,
-      schedule: newClass.schedule,
-      studentsCount: 0,
-      capacity: newClass.capacity,
-      status: 'Sắp khai giảng',
-      averageGpa: 0,
-      subject: newClass.subject
-    };
-    try {
-      await setDoc(doc(db, 'classes', created.id), created);
-      // Log audit log via helper
-      await logAuditEvent(
-        userProfile?.name || currentUser?.email || 'User',
-        currentUser?.uid || 'N/A',
-        'TẠO LỚP HỌC',
-        created.id,
-        'Success',
-        `Đã tạo lớp mới thành công: ${created.name} (${created.id})`
-      );
-      triggerToast(`✓ Đã khởi tạo thành công lớp học: ${created.name}`);
-      setIsCreateClassOpen(false);
-    } catch (error) {
-      console.warn("Firestore error, updating local state only:", error);
-      setClasses(prev => [...prev, created]);
-      triggerToast(`✓ Đã thêm lớp học mới cục bộ (Chế độ Sandbox)!`, 'success');
-      setIsCreateClassOpen(false);
-    }
-  };
-
   const handleCreateEnrollmentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEnrollment.name || !newEnrollment.email) {
@@ -484,6 +577,7 @@ export default function App() {
     const studentCreated: Student = {
       id: newId,
       name: newEnrollment.name,
+      grade: 6,
       classId: 'class_6A1',
       className: '6A1',
       course: newEnrollment.course,
@@ -614,7 +708,7 @@ export default function App() {
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1C6DD0]"></div>
           <div>
             <h3 className="text-sm font-bold text-[#1A365D]">Đang tải phân hệ SmartEdu ERP...</h3>
-            <span className="text-[10px] text-[#718096] font-medium block mt-0.5">Vui lòng đợi trong khi đồng bộ hóa cơ chế bảo mật Zero-Trust</span>
+            <span className="text-[10px] text-[#718096] font-medium block mt-0.5">Vui lòng đợi trong giây lát...</span>
           </div>
         </div>
       </div>
@@ -629,7 +723,7 @@ export default function App() {
         <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-blue-100/40 blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full bg-emerald-100/40 blur-3xl pointer-events-none"></div>
 
-        <div className="w-full max-w-5xl bg-white rounded-2xl border border-[#DCE7F3] shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 z-10 transition-all duration-300">
+        <div className="w-full max-w-4xl bg-white rounded-2xl border border-[#DCE7F3] shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 z-10 transition-all duration-300">
           
           {/* Left Panel: Brand & Info */}
           <div className="lg:col-span-5 bg-gradient-to-br from-[#1A365D] to-[#2B6CB0] p-8 lg:p-12 text-white flex flex-col justify-between relative">
@@ -643,90 +737,97 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="pt-8 space-y-4">
+              <div className="pt-6 space-y-3">
                 <h1 className="font-display text-2xl lg:text-3xl font-extrabold leading-tight tracking-tight">
                   Hệ Thống Quản Trị Trung Tâm Đào Tạo
                 </h1>
                 <p className="text-blue-100 text-xs leading-relaxed">
-                  Quản lý học thuật, tối ưu hóa vận hành tài chính, theo dõi tiến độ học tập và đồng hành rèn luyện cùng học viên qua hệ thống AI thông minh.
+                  Giải pháp quản lý học thuật toàn diện, theo dõi tiến độ học tập và tối ưu hóa vận hành trung tâm đào tạo.
                 </p>
               </div>
             </div>
 
-            <div className="pt-8 lg:pt-0 space-y-4 border-t border-blue-400/30 lg:border-none mt-8 lg:mt-0">
+            <div className="pt-8 space-y-3 border-t border-blue-400/30 mt-8">
               <div className="flex items-center space-x-3 text-xs text-blue-100">
-                <Shield className="h-4 w-4 shrink-0 text-emerald-400" />
-                <span>Bảo mật dữ liệu tuyệt đối chuẩn AES-256</span>
+                <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+                <span>Quản lý học sinh, lớp học & lịch học</span>
               </div>
               <div className="flex items-center space-x-3 text-xs text-blue-100">
-                <Activity className="h-4 w-4 shrink-0 text-emerald-400" />
-                <span>Hệ thống phân quyền Zero-Trust RBAC</span>
+                <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+                <span>Theo dõi điểm số & tiến độ học tập</span>
               </div>
-              <div className="text-[10px] text-blue-200/70">
+              <div className="flex items-center space-x-3 text-xs text-blue-100">
+                <Check className="h-4 w-4 shrink-0 text-emerald-400" />
+                <span>Quản lý học phí & báo cáo tài chính</span>
+              </div>
+              <div className="text-[10px] text-blue-200/70 pt-2">
                 © 2026 Smart Education Center. All rights reserved.
               </div>
             </div>
           </div>
 
-          {/* Right Panel: Sign In Form & Demo Accounts */}
-          <div className="lg:col-span-7 p-8 lg:p-12 flex flex-col justify-center space-y-8 bg-[#F7FAFC]/30">
+          {/* Right Panel: Clean Standard Login Form */}
+          <div className="lg:col-span-7 p-8 lg:p-12 flex flex-col justify-center space-y-6 bg-white">
             <div>
-              <h2 className="font-display text-xl lg:text-2xl font-extrabold text-[#1A365D]">
-                Đăng Nhập Hệ Thống
+              <div className="text-[11px] font-extrabold text-[#1C6DD0] tracking-wider uppercase mb-1">
+                SMART EDUCATION CENTER
+              </div>
+              <h2 className="font-display text-2xl font-extrabold text-[#1A365D]">
+                Đăng nhập hệ thống
               </h2>
               <p className="text-xs text-[#718096] mt-1">
-                Vui lòng điền thông tin tài khoản hoặc sử dụng nhanh tài khoản Demo bên dưới.
+                Vui lòng nhập thông tin tài khoản để truy cập hệ thống.
               </p>
             </div>
 
-            {/* Email/Pass Form */}
+            {/* Standard Username/Password Form */}
             <form onSubmit={(e) => {
               e.preventDefault();
               handleLoginSubmit(loginEmail, loginPassword);
             }} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-extrabold text-[#718096] uppercase tracking-wider block">
-                  Địa chỉ Email
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-extrabold text-[#4A5568] uppercase tracking-wider block">
+                  Tên đăng nhập
                 </label>
                 <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#A0AEC0] pointer-events-none font-bold">
-                    @
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-[#A0AEC0] pointer-events-none">
+                    <UserIcon className="h-4 w-4" />
                   </span>
                   <input
-                    type="email"
+                    type="text"
                     required
-                    placeholder="name@example.com"
+                    placeholder="Nhập tên đăng nhập hoặc email..."
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    className="w-full h-11 pl-9 pr-4 rounded-xl border border-[#DCE7F3] bg-white text-xs font-medium text-[#2D3748] focus:border-[#2F80ED] focus:outline-hidden transition-all placeholder:text-[#A0AEC0]"
+                    className="w-full h-11 pl-10 pr-4 rounded-xl border border-[#DCE7F3] bg-white text-xs font-medium text-[#2D3748] focus:border-[#1C6DD0] focus:ring-2 focus:ring-[#1C6DD0]/10 focus:outline-none transition-all placeholder:text-[#A0AEC0]"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-extrabold text-[#718096] uppercase tracking-wider block">
-                    Mật khẩu truy cập
+                  <label className="text-[11px] font-extrabold text-[#4A5568] uppercase tracking-wider block">
+                    Mật khẩu
                   </label>
                   <button
                     type="button"
                     onClick={() => setIsForgotPasswordOpen(true)}
-                    className="text-[10px] font-bold text-[#1C6DD0] hover:underline cursor-pointer"
+                    className="text-[11px] font-bold text-[#1C6DD0] hover:underline cursor-pointer"
                   >
                     Quên mật khẩu?
                   </button>
                 </div>
                 <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#A0AEC0] pointer-events-none">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-[#A0AEC0] pointer-events-none">
                     <Lock className="h-4 w-4" />
                   </span>
                   <input
                     type="password"
                     required
-                    placeholder="••••••••"
+                    placeholder="Nhập mật khẩu..."
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full h-11 pl-9 pr-4 rounded-xl border border-[#DCE7F3] bg-white text-xs font-medium text-[#2D3748] focus:border-[#2F80ED] focus:outline-hidden transition-all placeholder:text-[#A0AEC0]"
+                    className="w-full h-11 pl-10 pr-4 rounded-xl border border-[#DCE7F3] bg-white text-xs font-medium text-[#2D3748] focus:border-[#1C6DD0] focus:ring-2 focus:ring-[#1C6DD0]/10 focus:outline-none transition-all placeholder:text-[#A0AEC0]"
                   />
                 </div>
               </div>
@@ -734,57 +835,53 @@ export default function App() {
               <Button
                 variant="primary"
                 type="submit"
-                className="w-full h-11 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center justify-center space-x-2 shadow-md hover:shadow-lg"
+                className="w-full h-11 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center justify-center space-x-2 shadow-md hover:shadow-lg bg-[#1C6DD0] hover:bg-[#1557A6] text-white"
                 disabled={isLoggingIn}
               >
                 {isLoggingIn ? (
                   <>
                     <RefreshCw className="animate-spin h-4 w-4 mr-1.5" />
-                    Đang xác thực bảo mật...
+                    <span>Đang xử lý...</span>
                   </>
                 ) : (
                   <>
-                    <Key className="h-4 w-4 mr-1.5" />
-                    Đăng Nhập
+                    <span>Đăng nhập</span>
                   </>
                 )}
               </Button>
             </form>
 
-            {/* Quick Demo Access Header */}
-            <div className="pt-4 border-t border-[#DCE7F3] space-y-3">
-              <span className="text-[10px] font-extrabold text-[#94A3B8] uppercase tracking-wider block">
-                Truy Cập Nhanh - Tài Khoản Demo (Tự động Khởi Tạo)
-              </span>
-              
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {[
-                  { label: 'Admin / Chủ', email: 'admin@smartedu.vn', role: 'ADMIN', color: 'border-blue-200 hover:bg-blue-50 text-blue-700 bg-blue-50/20' },
-                  { label: 'Giáo vụ học vụ', email: 'giaovu@smartedu.vn', role: 'ACADEMIC_STAFF', color: 'border-amber-200 hover:bg-amber-50 text-amber-700 bg-amber-50/20' },
-                  { label: 'Kế toán tài chính', email: 'ketoan@smartedu.vn', role: 'ACCOUNTANT', color: 'border-emerald-200 hover:bg-emerald-50 text-emerald-700 bg-emerald-50/20' },
-                  { label: 'Giáo viên', email: 'gv.viettoan@smartedu.vn', role: 'TEACHER', color: 'border-indigo-200 hover:bg-indigo-50 text-indigo-700 bg-indigo-50/20' },
-                  { label: 'Học viên', email: 'hs.1@smartedu.vn', role: 'STUDENT', color: 'border-sky-200 hover:bg-sky-50 text-sky-700 bg-sky-50/20' },
-                  { label: 'Phụ huynh', email: 'ph.1@smartedu.vn', role: 'PARENT', color: 'border-rose-200 hover:bg-rose-50 text-rose-700 bg-rose-50/20' }
-                ].map((demo, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      setLoginEmail(demo.email);
-                      setLoginPassword('12345678');
-                      handleLoginSubmit(demo.email, '12345678');
-                    }}
-                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all duration-200 group flex flex-col justify-between h-20 ${demo.color}`}
-                  >
-                    <span className="text-[10px] font-bold block truncate">{demo.label}</span>
-                    <div>
-                      <span className="text-[9px] font-medium opacity-80 block truncate">{demo.email}</span>
-                      <span className="text-[8px] font-bold opacity-60 block mt-0.5">PW: 12345678</span>
-                    </div>
-                  </button>
-                ))}
+            {/* Sandbox Helper - Only visible when VITE_ENABLE_SANDBOX_AUTH=true */}
+            {import.meta.env.VITE_ENABLE_SANDBOX_AUTH === 'true' && (
+              <div className="pt-4 border-t border-[#E2E8F0] space-y-2">
+                <span className="text-[10px] font-bold text-[#94A3B8] uppercase block">
+                  Chế độ Sandbox (Dev Test)
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: 'Chủ trung tâm', acc: 'admin' },
+                    { label: 'Giáo vụ', acc: 'giaovu' },
+                    { label: 'Giáo viên', acc: 'teacher' },
+                    { label: 'Học sinh', acc: 'student' },
+                    { label: 'Phụ huynh', acc: 'parent' },
+                    { label: 'Kế toán', acc: 'accountant' },
+                  ].map((item, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setLoginEmail(item.acc);
+                        setLoginPassword('123456');
+                        handleLoginSubmit(item.acc, '123456');
+                      }}
+                      className="px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-[10px] font-medium text-gray-700 transition-colors"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -1023,6 +1120,21 @@ export default function App() {
             </div>
           )}
 
+          {/* TAB: QUẢN LÝ HỌC SINH & PHỤ HUYNH */}
+          {(activeTab === 'students' || activeTab === 'parents') && (
+            <StudentParentManagement
+              currentTab={activeTab as 'students' | 'parents'}
+              students={students}
+              parents={parents}
+              currentRole={currentRole}
+              currentUser={currentUser}
+              userProfile={userProfile}
+              onRaiseToast={triggerToast}
+              onLogAudit={(action, target, status, details) => logAuditEvent(userProfile?.name || currentUser?.email || 'User', currentUser?.uid || 'N/A', action, target, status, details)}
+              onNavigateTab={navigateToTab}
+            />
+          )}
+
           {/* TAB 2: HỒ SƠ GHI DANH (Enrollment) */}
           {activeTab === 'enrollment' && (
             <div className="space-y-6">
@@ -1156,64 +1268,37 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 4: LỚP HỌC (Classes) */}
+          {/* TAB 3.5: QUẢN LÝ GIÁO VIÊN & PHÂN CÔNG (Teachers) */}
+          {activeTab === 'teachers' && (
+            <TeacherManagement
+              teachers={teachers}
+              setTeachers={setTeachers}
+              assignments={teacherAssignments}
+              setAssignments={setTeacherAssignments}
+              classes={classes}
+              currentUser={currentUser}
+              userProfile={userProfile}
+              currentRole={currentRole}
+              triggerToast={triggerToast}
+              logAuditEvent={logAuditEvent}
+            />
+          )}
+
+          {/* TAB 4: LỚP HỌC & ENROLLMENT (Classes) */}
           {activeTab === 'classes' && (
-            <div className="space-y-6">
-              <PageHeader 
-                breadcrumbs={[{ label: 'Học vụ' }, { label: 'Quản lý Lớp học', active: true }]}
-                title="Danh mục Lớp học Trung tâm"
-                description="Quản lý lịch học đứng lớp, giáo án của giáo viên và sức chứa phòng ban học vụ."
-                action={
-                  <Button variant="primary" size="sm" onClick={() => setIsCreateClassOpen(true)}>
-                    <Plus className="h-4 w-4 mr-1" /> + Tạo lớp học mới
-                  </Button>
-                }
-              />
-
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {classes.map((cls) => (
-                  <div key={cls.id} className="rounded-2xl border border-[#DCE7F3] bg-white p-5 space-y-4 hover:border-[#2F80ED] transition-all">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <Badge status={cls.status}>{cls.status}</Badge>
-                        <h3 className="font-display text-sm font-extrabold text-[#2D3748] mt-1.5">{cls.name}</h3>
-                        <p className="text-[11px] text-[#718096] font-mono">{cls.id}</p>
-                      </div>
-                      <span className="text-xs font-bold text-indigo-600 font-display">Sức khỏe: 92%</span>
-                    </div>
-
-                    <div className="space-y-1.5 text-xs text-[#2D3748] border-t border-b border-[#EDF2F7] py-3.5">
-                      <div className="flex justify-between">
-                        <span className="text-[#718096]">Giáo trình ôn:</span>
-                        <span className="font-semibold">{cls.course}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#718096]">Giáo viên dạy:</span>
-                        <span className="font-semibold">{cls.teacher}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#718096]">Lịch học ca:</span>
-                        <span className="font-semibold font-mono">{cls.schedule}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#718096]">Phòng học:</span>
-                        <span className="font-semibold">{cls.room}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center text-xs">
-                      <div>
-                        <span className="text-[#718096]">Sĩ số:</span>{' '}
-                        <strong className="font-bold">{cls.studentsCount} / {cls.capacity} học viên</strong>
-                      </div>
-                      <Button variant="soft" size="sm" onClick={() => setSelectedClass(cls)}>
-                        Chi tiết lớp
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <ClassManagement
+              classes={classes}
+              setClasses={setClasses}
+              enrollments={classEnrollments}
+              setEnrollments={setClassEnrollments}
+              students={students}
+              setStudents={setStudents}
+              currentUser={currentUser}
+              userProfile={userProfile}
+              currentRole={currentRole}
+              triggerToast={triggerToast}
+              logAuditEvent={logAuditEvent}
+            />
           )}
 
           {/* TAB 5: THỜI KHÓA BIỂU (Schedule) */}
@@ -1783,95 +1868,6 @@ export default function App() {
         <Toast message={toastMessage} type={toastType} onClose={() => setToastMessage(null)} />
       )}
 
-      {/* C. MODAL: + TẠO LỚP HỌC (isCreateClassOpen) */}
-      <Modal
-        isOpen={isCreateClassOpen}
-        onClose={() => setIsCreateClassOpen(false)}
-        title="Tạo Lớp Học Mới"
-        subtitle="Thiết lập phòng, lịch học và môn phụ trách học vụ"
-      >
-        <form onSubmit={handleCreateClassSubmit} className="space-y-4 text-xs">
-          <div>
-            <label className="block text-[#718096] font-bold uppercase text-[9px] mb-1">Mã lớp học (Class Code)</label>
-            <input
-              type="text"
-              placeholder="Ví dụ: MATH-12A..."
-              value={newClass.id}
-              onChange={(e) => setNewClass(prev => ({ ...prev, id: e.target.value }))}
-              className="h-10 w-full rounded-lg border border-[#DCE7F3] px-3 font-mono font-bold"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[#718096] font-bold uppercase text-[9px] mb-1">Tên lớp học</label>
-            <input
-              type="text"
-              placeholder="Ví dụ: 12A - Chuyên Toán..."
-              value={newClass.name}
-              onChange={(e) => setNewClass(prev => ({ ...prev, name: e.target.value }))}
-              className="h-10 w-full rounded-lg border border-[#DCE7F3] px-3 font-semibold"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[#718096] font-bold uppercase text-[9px] mb-1">Giáo trình khóa học</label>
-              <select
-                value={newClass.course}
-                onChange={(e) => setNewClass(prev => ({ ...prev, course: e.target.value }))}
-                className="h-10 w-full rounded-lg border border-[#DCE7F3] px-2 font-medium"
-              >
-                {courses.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[#718096] font-bold uppercase text-[9px] mb-1">Giảng viên đứng lớp</label>
-              <select
-                value={newClass.teacher}
-                onChange={(e) => setNewClass(prev => ({ ...prev, teacher: e.target.value }))}
-                className="h-10 w-full rounded-lg border border-[#DCE7F3] px-2 font-medium"
-              >
-                <option value="Trần Quốc Việt">Thầy Trần Quốc Việt</option>
-                <option value="Nguyễn Thu Hà">Cô Nguyễn Thu Hà</option>
-                <option value="Lê Hoàng Anh">Thầy Lê Hoàng Anh</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[#718096] font-bold uppercase text-[9px] mb-1">Phòng học cơ sở</label>
-              <input
-                type="text"
-                value={newClass.room}
-                onChange={(e) => setNewClass(prev => ({ ...prev, room: e.target.value }))}
-                className="h-10 w-full rounded-lg border border-[#DCE7F3] px-3"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[#718096] font-bold uppercase text-[9px] mb-1">Sức chứa tối đa (Học viên)</label>
-              <input
-                type="number"
-                value={newClass.capacity}
-                onChange={(e) => setNewClass(prev => ({ ...prev, capacity: parseInt(e.target.value) }))}
-                className="h-10 w-full rounded-lg border border-[#DCE7F3] px-3"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 border-t border-[#EDF2F7] pt-4">
-            <Button variant="secondary" size="sm" type="button" onClick={() => setIsCreateClassOpen(false)}>
-              Hủy bỏ
-            </Button>
-            <Button variant="primary" size="sm" type="submit">
-              Xác nhận khởi tạo
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
       {/* D. MODAL: ĐĂNG KÝ GHI DANH MỚI (isCreateEnrollmentOpen) */}
       <Modal
         isOpen={isCreateEnrollmentOpen}
@@ -2302,6 +2298,37 @@ export default function App() {
           </div>
         </form>
       </Modal>
+
+      {/* K. MODAL: FIRST LOGIN PASSWORD CHANGE */}
+      {isFirstLoginOpen && pendingFirstLoginUser && (
+        <FirstLoginModal
+          isOpen={isFirstLoginOpen}
+          user={pendingFirstLoginUser}
+          onRaiseToast={triggerToast}
+          onLogAudit={(action, target, status, details) => logAuditEvent(pendingFirstLoginUser.name, pendingFirstLoginUser.id, action, target, status, details)}
+          onSuccess={(updatedUser) => {
+            setIsFirstLoginOpen(false);
+            setPendingFirstLoginUser(null);
+            setUserProfile(updatedUser);
+            setCurrentRole(updatedUser.role);
+            setCurrentUser({
+              uid: updatedUser.id,
+              email: updatedUser.email,
+              displayName: updatedUser.name
+            });
+            const defaultWorkspaceForRole: Record<Role, string> = {
+              ADMIN: 'dashboard',
+              OWNER: 'dashboard',
+              ACADEMIC_STAFF: 'dashboard',
+              TEACHER: 'classes',
+              STUDENT: 'dashboard',
+              PARENT: 'dashboard',
+              ACCOUNTANT: 'finance'
+            };
+            setActiveTab(defaultWorkspaceForRole[updatedUser.role] || 'dashboard');
+          }}
+        />
+      )}
 
     </div>
   );

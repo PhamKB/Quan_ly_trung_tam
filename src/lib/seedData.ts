@@ -1,61 +1,56 @@
 import { doc, writeBatch, collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from './firebase';
 
-// Subjects
+// Subjects (Exactly 5 subjects: Toán, Ngữ văn, Tiếng Anh, Vật lý, Hóa học - NO Sinh học)
 export const SUBJECTS = [
   { id: 'toan', name: 'Toán học', code: 'TOAN' },
   { id: 'van', name: 'Ngữ văn', code: 'NGU_VAN' },
   { id: 'anh', name: 'Tiếng Anh', code: 'TIENG_ANH' },
   { id: 'ly', name: 'Vật lý', code: 'VAT_LY' },
   { id: 'hoa', name: 'Hóa học', code: 'HOA_HOC' },
-  { id: 'sinh', name: 'Sinh học', code: 'SINH_HOC' },
 ];
 
-// Teachers (Exactly 18, 3 per subject)
+// Teachers (Exactly 15 teachers, 3 per subject)
 export const TEACHERS = [
   // Toán học
-  { id: 'teacher_toan_1', name: 'Trần Quốc Việt', email: 'gv.viettoan@smartedu.vn', subjectId: 'toan', department: 'Tổ Tự Nhiên' },
-  { id: 'teacher_toan_2', name: 'Nguyễn Chí Thanh', email: 'gv.thanhtoan@smartedu.vn', subjectId: 'toan', department: 'Tổ Tự Nhiên' },
-  { id: 'teacher_toan_3', name: 'Vũ Đình Long', email: 'gv.longtoan@smartedu.vn', subjectId: 'toan', department: 'Tổ Tự Nhiên' },
+  { id: 'teacher_toan_1', teacherId: 'TCH-2026-001', employeeCode: 'TCH-2026-001', name: 'Trần Quốc Việt', fullName: 'Trần Quốc Việt', email: 'gv.viettoan@smartedu.vn', phone: '0913000101', subjectId: 'toan', subjectCode: 'TOAN', subjectName: 'Toán học', department: 'Tổ Tự Nhiên', status: 'ACTIVE' },
+  { id: 'teacher_toan_2', teacherId: 'TCH-2026-002', employeeCode: 'TCH-2026-002', name: 'Nguyễn Chí Thanh', fullName: 'Nguyễn Chí Thanh', email: 'gv.thanhtoan@smartedu.vn', phone: '0913000102', subjectId: 'toan', subjectCode: 'TOAN', subjectName: 'Toán học', department: 'Tổ Tự Nhiên', status: 'ACTIVE' },
+  { id: 'teacher_toan_3', teacherId: 'TCH-2026-003', employeeCode: 'TCH-2026-003', name: 'Vũ Đình Long', fullName: 'Vũ Đình Long', email: 'gv.longtoan@smartedu.vn', phone: '0913000103', subjectId: 'toan', subjectCode: 'TOAN', subjectName: 'Toán học', department: 'Tổ Tự Nhiên', status: 'ACTIVE' },
   // Ngữ văn
-  { id: 'teacher_van_1', name: 'Nguyễn Thu Hà', email: 'gv.havan@smartedu.vn', subjectId: 'van', department: 'Tổ Xã Hội' },
-  { id: 'teacher_van_2', name: 'Phạm Ngọc Lan', email: 'gv.lanvan@smartedu.vn', subjectId: 'van', department: 'Tổ Xã Hội' },
-  { id: 'teacher_van_3', name: 'Lê Khánh Huyền', email: 'gv.huyenvan@smartedu.vn', subjectId: 'van', department: 'Tổ Xã Hội' },
+  { id: 'teacher_van_1', teacherId: 'TCH-2026-004', employeeCode: 'TCH-2026-004', name: 'Nguyễn Thu Hà', fullName: 'Nguyễn Thu Hà', email: 'gv.havan@smartedu.vn', phone: '0913000104', subjectId: 'van', subjectCode: 'NGU_VAN', subjectName: 'Ngữ văn', department: 'Tổ Xã Hội', status: 'ACTIVE' },
+  { id: 'teacher_van_2', teacherId: 'TCH-2026-005', employeeCode: 'TCH-2026-005', name: 'Phạm Ngọc Lan', fullName: 'Phạm Ngọc Lan', email: 'gv.lanvan@smartedu.vn', phone: '0913000105', subjectId: 'van', subjectCode: 'NGU_VAN', subjectName: 'Ngữ văn', department: 'Tổ Xã Hội', status: 'ACTIVE' },
+  { id: 'teacher_van_3', teacherId: 'TCH-2026-006', employeeCode: 'TCH-2026-006', name: 'Lê Khánh Huyền', fullName: 'Lê Khánh Huyền', email: 'gv.huyenvan@smartedu.vn', phone: '0913000106', subjectId: 'van', subjectCode: 'NGU_VAN', subjectName: 'Ngữ văn', department: 'Tổ Xã Hội', status: 'ACTIVE' },
   // Tiếng Anh
-  { id: 'teacher_anh_1', name: 'Lê Hoàng Anh', email: 'gv.anhenglish@smartedu.vn', subjectId: 'anh', department: 'Tổ Ngoại Ngữ' },
-  { id: 'teacher_anh_2', name: 'Đỗ Quỳnh Chi', email: 'gv.chienglish@smartedu.vn', subjectId: 'anh', department: 'Tổ Ngoại Ngữ' },
-  { id: 'teacher_anh_3', name: 'Trịnh Minh Trí', email: 'gv.trienglish@smartedu.vn', subjectId: 'anh', department: 'Tổ Ngoại Ngữ' },
+  { id: 'teacher_anh_1', teacherId: 'TCH-2026-007', employeeCode: 'TCH-2026-007', name: 'Lê Hoàng Anh', fullName: 'Lê Hoàng Anh', email: 'gv.anhenglish@smartedu.vn', phone: '0913000107', subjectId: 'anh', subjectCode: 'TIENG_ANH', subjectName: 'Tiếng Anh', department: 'Tổ Ngoại Ngữ', status: 'ACTIVE' },
+  { id: 'teacher_anh_2', teacherId: 'TCH-2026-008', employeeCode: 'TCH-2026-008', name: 'Đỗ Quỳnh Chi', fullName: 'Đỗ Quỳnh Chi', email: 'gv.chienglish@smartedu.vn', phone: '0913000108', subjectId: 'anh', subjectCode: 'TIENG_ANH', subjectName: 'Tiếng Anh', department: 'Tổ Ngoại Ngữ', status: 'ACTIVE' },
+  { id: 'teacher_anh_3', teacherId: 'TCH-2026-009', employeeCode: 'TCH-2026-009', name: 'Trịnh Minh Trí', fullName: 'Trịnh Minh Trí', email: 'gv.trienglish@smartedu.vn', phone: '0913000109', subjectId: 'anh', subjectCode: 'TIENG_ANH', subjectName: 'Tiếng Anh', department: 'Tổ Ngoại Ngữ', status: 'ACTIVE' },
   // Vật lý
-  { id: 'teacher_ly_1', name: 'Phạm Minh Đức', email: 'gv.ducly@smartedu.vn', subjectId: 'ly', department: 'Tổ Tự Nhiên' },
-  { id: 'teacher_ly_2', name: 'Hoàng Thế Anh', email: 'gv.anhly@smartedu.vn', subjectId: 'ly', department: 'Tổ Tự Nhiên' },
-  { id: 'teacher_ly_3', name: 'Vũ Việt Hoàng', email: 'gv.hoangly@smartedu.vn', subjectId: 'ly', department: 'Tổ Tự Nhiên' },
+  { id: 'teacher_ly_1', teacherId: 'TCH-2026-010', employeeCode: 'TCH-2026-010', name: 'Phạm Minh Đức', fullName: 'Phạm Minh Đức', email: 'gv.ducly@smartedu.vn', phone: '0913000110', subjectId: 'ly', subjectCode: 'VAT_LY', subjectName: 'Vật lý', department: 'Tổ Tự Nhiên', status: 'ACTIVE' },
+  { id: 'teacher_ly_2', teacherId: 'TCH-2026-011', employeeCode: 'TCH-2026-011', name: 'Hoàng Thế Anh', fullName: 'Hoàng Thế Anh', email: 'gv.anhly@smartedu.vn', phone: '0913000111', subjectId: 'ly', subjectCode: 'VAT_LY', subjectName: 'Vật lý', department: 'Tổ Tự Nhiên', status: 'ACTIVE' },
+  { id: 'teacher_ly_3', teacherId: 'TCH-2026-012', employeeCode: 'TCH-2026-012', name: 'Vũ Việt Hoàng', fullName: 'Vũ Việt Hoàng', email: 'gv.hoangly@smartedu.vn', phone: '0913000112', subjectId: 'ly', subjectCode: 'VAT_LY', subjectName: 'Vật lý', department: 'Tổ Tự Nhiên', status: 'ACTIVE' },
   // Hóa học
-  { id: 'teacher_hoa_1', name: 'Ngô Quốc Bảo', email: 'gv.baohoa@smartedu.vn', subjectId: 'hoa', department: 'Tổ Tự Nhiên' },
-  { id: 'teacher_hoa_2', name: 'Nguyễn Mai Anh', email: 'gv.maianhhoa@smartedu.vn', subjectId: 'hoa', department: 'Tổ Tự Nhiên' },
-  { id: 'teacher_hoa_3', name: 'Dương Đức Duy', email: 'gv.duyhoa@smartedu.vn', subjectId: 'hoa', department: 'Tổ Tự Nhiên' },
-  // Sinh học
-  { id: 'teacher_sinh_1', name: 'Phan Thanh Hải', email: 'gv.haisinh@smartedu.vn', subjectId: 'sinh', department: 'Tổ Tự Nhiên' },
-  { id: 'teacher_sinh_2', name: 'Lâm Thúy Hằng', email: 'gv.hangsinh@smartedu.vn', subjectId: 'sinh', department: 'Tổ Tự Nhiên' },
-  { id: 'teacher_sinh_3', name: 'Trương Hoàng Lâm', email: 'gv.lamsinh@smartedu.vn', subjectId: 'sinh', department: 'Tổ Tự Nhiên' },
+  { id: 'teacher_hoa_1', teacherId: 'TCH-2026-013', employeeCode: 'TCH-2026-013', name: 'Ngô Quốc Bảo', fullName: 'Ngô Quốc Bảo', email: 'gv.baohoa@smartedu.vn', phone: '0913000113', subjectId: 'hoa', subjectCode: 'HOA_HOC', subjectName: 'Hóa học', department: 'Tổ Tự Nhiên', status: 'ACTIVE' },
+  { id: 'teacher_hoa_2', teacherId: 'TCH-2026-014', employeeCode: 'TCH-2026-014', name: 'Nguyễn Mai Anh', fullName: 'Nguyễn Mai Anh', email: 'gv.maianhhoa@smartedu.vn', phone: '0913000114', subjectId: 'hoa', subjectCode: 'HOA_HOC', subjectName: 'Hóa học', department: 'Tổ Tự Nhiên', status: 'ACTIVE' },
+  { id: 'teacher_hoa_3', teacherId: 'TCH-2026-015', employeeCode: 'TCH-2026-015', name: 'Dương Đức Duy', fullName: 'Dương Đức Duy', email: 'gv.duyhoa@smartedu.vn', phone: '0913000115', subjectId: 'hoa', subjectCode: 'HOA_HOC', subjectName: 'Hóa học', department: 'Tổ Tự Nhiên', status: 'ACTIVE' },
 ];
 
 // Classes (12 classes: 6, 7, 8, 9)
 export const CLASSES = [
-  { id: 'class_6A1', name: '6A1', grade: 6, room: 'Phòng 101', capacity: 30, schedule: 'Thứ 2 - Thứ 4 - Thứ 6 · 08:00' },
-  { id: 'class_6A2', name: '6A2', grade: 6, room: 'Phòng 102', capacity: 30, schedule: 'Thứ 3 - Thứ 5 - Thứ 7 · 08:00' },
-  { id: 'class_6A3', name: '6A3', grade: 6, room: 'Phòng 103', capacity: 30, schedule: 'Thứ 2 - Thứ 4 - Thứ 6 · 14:00' },
+  { id: 'class_6A1', classId: 'class_6A1', classCode: '6A1', className: 'Lớp 6A1', name: 'Lớp 6A1', grade: 6, room: 'Phòng 101', capacity: 18, academicYear: '2026-2027', schedule: 'Thứ 2 - Thứ 4 - Thứ 6 · 08:00' },
+  { id: 'class_6A2', classId: 'class_6A2', classCode: '6A2', className: 'Lớp 6A2', name: 'Lớp 6A2', grade: 6, room: 'Phòng 102', capacity: 18, academicYear: '2026-2027', schedule: 'Thứ 3 - Thứ 5 - Thứ 7 · 08:00' },
+  { id: 'class_6A3', classId: 'class_6A3', classCode: '6A3', className: 'Lớp 6A3', name: 'Lớp 6A3', grade: 6, room: 'Phòng 103', capacity: 18, academicYear: '2026-2027', schedule: 'Thứ 2 - Thứ 4 - Thứ 6 · 14:00' },
 
-  { id: 'class_7A1', name: '7A1', grade: 7, room: 'Phòng 201', capacity: 30, schedule: 'Thứ 3 - Thứ 5 - Thứ 7 · 14:00' },
-  { id: 'class_7A2', name: '7A2', grade: 7, room: 'Phòng 202', capacity: 30, schedule: 'Thứ 2 - Thứ 4 - Thứ 6 · 10:00' },
-  { id: 'class_7A3', name: '7A3', grade: 7, room: 'Phòng 203', capacity: 30, schedule: 'Thứ 3 - Thứ 5 - Thứ 7 · 10:00' },
+  { id: 'class_7A1', classId: 'class_7A1', classCode: '7A1', className: 'Lớp 7A1', name: 'Lớp 7A1', grade: 7, room: 'Phòng 201', capacity: 18, academicYear: '2026-2027', schedule: 'Thứ 3 - Thứ 5 - Thứ 7 · 14:00' },
+  { id: 'class_7A2', classId: 'class_7A2', classCode: '7A2', className: 'Lớp 7A2', name: 'Lớp 7A2', grade: 7, room: 'Phòng 202', capacity: 18, academicYear: '2026-2027', schedule: 'Thứ 2 - Thứ 4 - Thứ 6 · 10:00' },
+  { id: 'class_7A3', classId: 'class_7A3', classCode: '7A3', className: 'Lớp 7A3', name: 'Lớp 7A3', grade: 7, room: 'Phòng 203', capacity: 18, academicYear: '2026-2027', schedule: 'Thứ 3 - Thứ 5 - Thứ 7 · 10:00' },
 
-  { id: 'class_8A1', name: '8A1', grade: 8, room: 'Phòng 301', capacity: 30, schedule: 'Thứ 2 - Thứ 4 - Thứ 6 · 15:30' },
-  { id: 'class_8A2', name: '8A2', grade: 8, room: 'Phòng 302', capacity: 30, schedule: 'Thứ 3 - Thứ 5 - Thứ 7 · 15:30' },
-  { id: 'class_8A3', name: '8A3', grade: 8, room: 'Phòng 303', capacity: 30, schedule: 'Thứ 2 - Thứ 4 - Thứ 6 · 19:30' },
+  { id: 'class_8A1', classId: 'class_8A1', classCode: '8A1', className: 'Lớp 8A1', name: 'Lớp 8A1', grade: 8, room: 'Phòng 301', capacity: 18, academicYear: '2026-2027', schedule: 'Thứ 2 - Thứ 4 - Thứ 6 · 15:30' },
+  { id: 'class_8A2', classId: 'class_8A2', classCode: '8A2', className: 'Lớp 8A2', name: 'Lớp 8A2', grade: 8, room: 'Phòng 302', capacity: 18, academicYear: '2026-2027', schedule: 'Thứ 3 - Thứ 5 - Thứ 7 · 15:30' },
+  { id: 'class_8A3', classId: 'class_8A3', classCode: '8A3', className: 'Lớp 8A3', name: 'Lớp 8A3', grade: 8, room: 'Phòng 303', capacity: 18, academicYear: '2026-2027', schedule: 'Thứ 2 - Thứ 4 - Thứ 6 · 19:30' },
 
-  { id: 'class_9A1', name: '9A1', grade: 9, room: 'Phòng 401', capacity: 30, schedule: 'Thứ 3 - Thứ 5 - Thứ 7 · 19:30' },
-  { id: 'class_9A2', name: '9A2', grade: 9, room: 'Phòng 402', capacity: 30, schedule: 'Thứ 2 - Thứ 4 - Thứ 6 · 17:30' },
-  { id: 'class_9A3', name: '9A3', grade: 9, room: 'Phòng 403', capacity: 30, schedule: 'Thứ 3 - Thứ 5 - Thứ 7 · 17:30' },
+  { id: 'class_9A1', classId: 'class_9A1', classCode: '9A1', className: 'Lớp 9A1', name: 'Lớp 9A1', grade: 9, room: 'Phòng 401', capacity: 18, academicYear: '2026-2027', schedule: 'Thứ 3 - Thứ 5 - Thứ 7 · 19:30' },
+  { id: 'class_9A2', classId: 'class_9A2', classCode: '9A2', className: 'Lớp 9A2', name: 'Lớp 9A2', grade: 9, room: 'Phòng 402', capacity: 18, academicYear: '2026-2027', schedule: 'Thứ 2 - Thứ 4 - Thứ 6 · 17:30' },
+  { id: 'class_9A3', classId: 'class_9A3', classCode: '9A3', className: 'Lớp 9A3', name: 'Lớp 9A3', grade: 9, room: 'Phòng 403', capacity: 18, academicYear: '2026-2027', schedule: 'Thứ 3 - Thứ 5 - Thứ 7 · 17:30' },
 ];
 
 // Helper to generate deterministic students and parents (Vietnamese names)
@@ -117,14 +112,14 @@ export function generateSeedData() {
     });
   });
 
-  // Generate 80 Students (20 students per grade, evenly distributed across classes)
+  // Generate 216 Students (54 students per grade, 18 per class across 12 classes)
   let studentCounter = 1;
   const grades = [6, 7, 8, 9];
 
   grades.forEach((grade) => {
     const gradeClasses = CLASSES.filter(c => c.grade === grade);
     
-    for (let i = 1; i <= 20; i++) {
+    for (let i = 1; i <= 54; i++) {
       const studentId = `STU-2026-${studentCounter.toString().padStart(3, '0')}`;
       const parentId = `PAR-2026-${studentCounter.toString().padStart(3, '0')}`;
       
@@ -216,23 +211,37 @@ export function generateSeedData() {
 
       parents.push({
         id: parentId,
+        parentId: parentId,
         name: parentName,
+        fullName: parentName,
+        relationship: studentCounter % 2 === 0 ? 'Cha' : 'Mẹ',
         email: parentEmail,
         phone: `0937000${studentCounter.toString().padStart(3, '0')}`,
+        address: 'Hà Nội',
         job: parentJobs[studentCounter % parentJobs.length],
+        studentIds: [studentId],
         childIds: [studentId],
+        status: 'ACTIVE',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       });
 
       students.push({
         id: studentId,
+        studentId: studentId,
         name: studentName,
+        fullName: studentName,
+        dateOfBirth: `2012-05-${((studentCounter % 28) + 1).toString().padStart(2, '0')}`,
+        gender: studentCounter % 2 === 0 ? 'Nam' : 'Nữ',
         classId: assignedClass.id,
         className: `${assignedClass.grade}${assignedClass.name.slice(-2)}`,
         course: `Khối ${grade} Toàn diện`,
         grade,
+        status: 'ACTIVE',
         email: studentEmail,
         phone: `0985000${studentCounter.toString().padStart(3, '0')}`,
         parentId,
+        parentIds: [parentId],
         parentName,
         gpa,
         attendanceRate,
@@ -241,7 +250,6 @@ export function generateSeedData() {
         riskLevel: gpa < 5.0 || attendanceRate < 70 ? 'High' : gpa < 6.5 ? 'Medium' : 'Low',
         tuitionPaid: paidAmount,
         tuitionOwed,
-        status: tuitionOwed > 0 && studentCounter % 11 === 0 ? 'OVERDUE' : tuitionOwed > 0 ? 'PARTIAL' : 'PAID',
         financials: {
           baseFee,
           discount,
@@ -249,7 +257,9 @@ export function generateSeedData() {
           paidAmount,
           tuitionOwed,
           status,
-        }
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       });
 
       studentCounter++;
@@ -298,7 +308,6 @@ export async function seedDatabase() {
         anh: 'teacher_anh_' + ((parseInt(cls.id.slice(-1)) || 3) % 3 + 1),
         ly: 'teacher_ly_' + ((parseInt(cls.id.slice(-1)) || 1) % 3 + 1),
         hoa: 'teacher_hoa_' + ((parseInt(cls.id.slice(-1)) || 2) % 3 + 1),
-        sinh: 'teacher_sinh_' + ((parseInt(cls.id.slice(-1)) || 3) % 3 + 1),
       }
     });
   });
